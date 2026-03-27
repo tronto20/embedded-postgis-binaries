@@ -100,7 +100,7 @@ extract_archive() {
         fi
 
         tmp_tar=$(mktemp "$target_dir/.extract.XXXXXX.tar")
-        zstd -d -f -- "$archive_path" -o "$tmp_tar"
+        zstd -d -f -c -- "$archive_path" > "$tmp_tar"
         "$extractor" -xf "$tmp_tar" -C "$target_dir"
         rm -f "$tmp_tar"
         return 0
