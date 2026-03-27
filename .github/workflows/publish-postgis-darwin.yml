@@ -2,14 +2,11 @@ name: Publish PostGIS Darwin Artifact
 on:
   workflow_dispatch:
     inputs:
-      release_version:
-        description: Artifact version (for example 18.3.0)
-        required: true
       pg_version:
-        description: PostgreSQL source version (for example 18.3)
+        description: "PostgreSQL source version (supported: 16.x, 17.x, 18.x; for example 18.3)"
         required: true
       postgis_version:
-        description: PostGIS version (for example 3.6.2)
+        description: "PostGIS version (supported: 3.4.x, 3.5.x, 3.6.x; for example 3.6.2)"
         required: true
         default: "3.6.2"
 jobs:
@@ -29,8 +26,10 @@ jobs:
           brew update
           brew install postgresql
           echo "$(brew --prefix postgresql)/bin" >> $GITHUB_PATH
+      - name: Set artifact version
+        run: echo "RELEASE_VERSION=${{ inputs.pg_version }}-${{ inputs.postgis_version }}" >> $GITHUB_ENV
       - name: Test PostgreSQL/PostGIS bundle
-        run: ./gradlew :custom-darwin-platform:testCustomDarwinJar -Pversion=${{ inputs.release_version }} -PpgVersion=${{ inputs.pg_version }} -PpostgisVersion=${{ inputs.postgis_version }} -PdistName=darwin -ParchName=arm64v8
+        run: ./gradlew :custom-darwin-platform:testCustomDarwinJar -Pversion=$RELEASE_VERSION -PpgVersion=${{ inputs.pg_version }} -PpostgisVersion=${{ inputs.postgis_version }} -PdistName=darwin -ParchName=arm64v8
       - name: Publish artifact with Gradle
         env:
           MAVEN_USER: ${{ secrets.MAVEN_USER }}
@@ -40,7 +39,7 @@ jobs:
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASS }}
         run: |
           ./gradlew :custom-darwin-platform:publish --info \
-            -Pversion=${{ inputs.release_version }} \
+            -Pversion=$RELEASE_VERSION \
             -PpgVersion=${{ inputs.pg_version }} \
             -PpostgisVersion=${{ inputs.postgis_version }} \
             -PdistName=darwin \

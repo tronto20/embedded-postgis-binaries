@@ -2,17 +2,14 @@ name: Publish PostGIS Windows Artifact
 on:
   workflow_dispatch:
     inputs:
-      release_version:
-        description: Artifact version (for example 18.3.0)
-        required: true
       pg_version:
-        description: PostgreSQL source version (for example 18.3)
+        description: "PostgreSQL source version (supported: 16.x, 17.x, 18.x; for example 18.3)"
         required: true
       pg_bin_version:
-        description: PostgreSQL binary version (for example 18.3-1)
-        required: true
+        description: "Optional PostgreSQL binary version override (defaults to <pg_version>-1, for example 18.3-1)"
+        required: false
       postgis_version:
-        description: PostGIS version (for example 3.6.2)
+        description: "PostGIS version (supported: 3.4.x, 3.5.x, 3.6.x; for example 3.6.2)"
         required: true
         default: "3.6.2"
 jobs:
@@ -27,8 +24,18 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: 17
+      - name: Set artifact version
+        shell: bash
+        env:
+          POSTGRES_VERSION: ${{ inputs.pg_version }}
+          POSTGRES_BIN_VERSION: ${{ inputs.pg_bin_version }}
+          POSTGIS_VERSION: ${{ inputs.postgis_version }}
+        run: |
+          RESOLVED_POSTGRES_BIN_VERSION=${POSTGRES_BIN_VERSION:-${POSTGRES_VERSION}-1}
+          echo "RELEASE_VERSION=${POSTGRES_VERSION}-${POSTGIS_VERSION}" >> $GITHUB_ENV
+          echo "POSTGRES_BIN_VERSION=$RESOLVED_POSTGRES_BIN_VERSION" >> $GITHUB_ENV
       - name: Test PostgreSQL/PostGIS bundle
-        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=${{ inputs.release_version }} -PpgVersion=${{ inputs.pg_version }} -PpgBinVersion=${{ inputs.pg_bin_version }} -PpostgisVersion=${{ inputs.postgis_version }} -PdistName=windows -ParchName=amd64
+        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=$RELEASE_VERSION -PpgVersion=${{ inputs.pg_version }} -PpgBinVersion=$POSTGRES_BIN_VERSION -PpostgisVersion=${{ inputs.postgis_version }} -PdistName=windows -ParchName=amd64
         shell: bash
       - name: Publish artifact with Gradle
         env:
@@ -39,9 +46,9 @@ jobs:
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASS }}
         run: |
           ./gradlew :custom-windows-platform:publish --info \
-            -Pversion=${{ inputs.release_version }} \
+            -Pversion=$RELEASE_VERSION \
             -PpgVersion=${{ inputs.pg_version }} \
-            -PpgBinVersion=${{ inputs.pg_bin_version }} \
+            -PpgBinVersion=$POSTGRES_BIN_VERSION \
             -PpostgisVersion=${{ inputs.postgis_version }} \
             -PdistName=windows \
             -ParchName=amd64 \

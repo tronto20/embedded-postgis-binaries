@@ -41,7 +41,7 @@ EOF
     if [ "$POSTGIS_MAJOR" -gt 3 ] || { [ "$POSTGIS_MAJOR" -eq 3 ] && [ "$POSTGIS_MINOR" -ge 4 ]; }; then
         PROJ_VERSION=6.1.1
     fi
-    if [ "$POSTGIS_MAJOR" -gt 3 ] || { [ "$POSTGIS_MAJOR" -eq 3 ] && [ "$POSTGIS_MINOR" -ge 6 ]; }; then
+    if [ "$POSTGIS_MAJOR" -gt 3 ] || { [ "$POSTGIS_MAJOR" -eq 3 ] && [ "$POSTGIS_MINOR" -ge 5 ]; }; then
         GEOS_VERSION=3.8.1
         GDAL_VERSION=3.0.4
     fi

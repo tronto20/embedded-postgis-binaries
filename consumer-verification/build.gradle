@@ -6,7 +6,7 @@ group = 'io.zonky.test.postgres.verification'
 version = '1.0.0-SNAPSHOT'
 
 def embeddedPostgresVersion = providers.gradleProperty('embeddedPostgresVersion').orElse('2.2.2').get()
-def postgresBinariesVersion = providers.gradleProperty('postgresBinariesVersion').orElse('18.3.0-LOCAL-postgis-3.6.2').get()
+def postgresBinariesVersion = providers.gradleProperty('postgresBinariesVersion').orElse('18.3-3.6.2').get()
 
 java {
     sourceCompatibility = JavaVersion.VERSION_11

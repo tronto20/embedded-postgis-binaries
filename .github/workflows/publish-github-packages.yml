@@ -2,24 +2,18 @@ name: Publish GitHub Packages
 on:
   workflow_dispatch:
     inputs:
-      release_version:
-        description: Artifact version for Linux, Alpine, Windows x64, and macOS arm64 (for example 18.3.0)
-        required: true
       pg_version:
-        description: PostgreSQL version for Linux, Alpine, Windows x64, and macOS arm64 (16.x or later, for example 18.3)
+        description: "PostgreSQL version for Linux, Alpine, Windows x64, and macOS arm64 (supported: 16.x, 17.x, 18.x; for example 18.3)"
         required: true
       pg_bin_version:
-        description: PostgreSQL Windows x64 binary version (for example 18.3-1)
-        required: true
+        description: "Optional PostgreSQL Windows x64 binary version override (defaults to <pg_version>-1, for example 18.3-1)"
+        required: false
       postgis_version:
-        description: PostGIS version (for example 3.6.2)
+        description: "PostGIS version (supported: 3.4.x, 3.5.x, 3.6.x; for example 3.6.2)"
         required: true
         default: "3.6.2"
-      windows_arm64_release_version:
-        description: Optional artifact version override for Windows arm64 when MSYS2 lags behind
-        required: false
       windows_arm64_pg_version:
-        description: Optional PostgreSQL version override for Windows arm64 when MSYS2 lags behind
+        description: "Optional PostgreSQL version override for Windows arm64 when MSYS2 lags behind"
         required: false
 permissions:
   contents: read
@@ -38,11 +32,10 @@ jobs:
           java-version: 17
       - name: Set environment variables
         env:
-          RELEASE_VERSION: ${{ inputs.release_version }}
           POSTGRES_VERSION: ${{ inputs.pg_version }}
           POSTGIS_VERSION: ${{ inputs.postgis_version }}
         run: |
-          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=${POSTGRES_VERSION}-${POSTGIS_VERSION}" >> $GITHUB_ENV
           echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
           echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
           echo "GITHUB_PACKAGES_URL=https://maven.pkg.github.com/${GITHUB_REPOSITORY}" >> $GITHUB_ENV
@@ -79,14 +72,14 @@ jobs:
       - name: Set environment variables
         shell: bash
         env:
-          RELEASE_VERSION: ${{ inputs.release_version }}
           POSTGRES_VERSION: ${{ inputs.pg_version }}
           POSTGRES_BIN_VERSION: ${{ inputs.pg_bin_version }}
           POSTGIS_VERSION: ${{ inputs.postgis_version }}
         run: |
-          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          RESOLVED_POSTGRES_BIN_VERSION=${POSTGRES_BIN_VERSION:-${POSTGRES_VERSION}-1}
+          echo "RELEASE_VERSION=${POSTGRES_VERSION}-${POSTGIS_VERSION}" >> $GITHUB_ENV
           echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
-          echo "POSTGRES_BIN_VERSION=$POSTGRES_BIN_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_BIN_VERSION=$RESOLVED_POSTGRES_BIN_VERSION" >> $GITHUB_ENV
           echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
           echo "GITHUB_PACKAGES_URL=https://maven.pkg.github.com/${GITHUB_REPOSITORY}" >> $GITHUB_ENV
       - name: Test PostgreSQL/PostGIS bundle
@@ -121,14 +114,13 @@ jobs:
       - name: Resolve Windows arm64 versions
         shell: bash
         env:
-          DEFAULT_RELEASE_VERSION: ${{ inputs.release_version }}
           DEFAULT_POSTGRES_VERSION: ${{ inputs.pg_version }}
-          WINDOWS_ARM64_RELEASE_VERSION: ${{ inputs.windows_arm64_release_version }}
           WINDOWS_ARM64_POSTGRES_VERSION: ${{ inputs.windows_arm64_pg_version }}
           POSTGIS_VERSION: ${{ inputs.postgis_version }}
         run: |
-          echo "RELEASE_VERSION=${WINDOWS_ARM64_RELEASE_VERSION:-$DEFAULT_RELEASE_VERSION}" >> $GITHUB_ENV
-          echo "POSTGRES_VERSION=${WINDOWS_ARM64_POSTGRES_VERSION:-$DEFAULT_POSTGRES_VERSION}" >> $GITHUB_ENV
+          RESOLVED_POSTGRES_VERSION=${WINDOWS_ARM64_POSTGRES_VERSION:-$DEFAULT_POSTGRES_VERSION}
+          echo "RELEASE_VERSION=${RESOLVED_POSTGRES_VERSION}-${POSTGIS_VERSION}" >> $GITHUB_ENV
+          echo "POSTGRES_VERSION=$RESOLVED_POSTGRES_VERSION" >> $GITHUB_ENV
           echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
           echo "GITHUB_PACKAGES_URL=https://maven.pkg.github.com/${GITHUB_REPOSITORY}" >> $GITHUB_ENV
       - name: Test PostgreSQL/PostGIS bundle
@@ -166,11 +158,10 @@ jobs:
           echo "$(brew --prefix postgresql)/bin" >> $GITHUB_PATH
       - name: Set environment variables
         env:
-          RELEASE_VERSION: ${{ inputs.release_version }}
           POSTGRES_VERSION: ${{ inputs.pg_version }}
           POSTGIS_VERSION: ${{ inputs.postgis_version }}
         run: |
-          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=${POSTGRES_VERSION}-${POSTGIS_VERSION}" >> $GITHUB_ENV
           echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
           echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
           echo "GITHUB_PACKAGES_URL=https://maven.pkg.github.com/${GITHUB_REPOSITORY}" >> $GITHUB_ENV
@@ -207,21 +198,23 @@ jobs:
           java-version: 17
       - name: Resolve BOM metadata
         env:
-          RELEASE_VERSION: ${{ inputs.release_version }}
+          RELEASE_VERSION: ${{ inputs.pg_version }}-${{ inputs.postgis_version }}
           POSTGIS_VERSION: ${{ inputs.postgis_version }}
-          WINDOWS_ARM64_RELEASE_VERSION: ${{ inputs.windows_arm64_release_version }}
+          WINDOWS_ARM64_POSTGRES_VERSION: ${{ inputs.windows_arm64_pg_version }}
+          DEFAULT_POSTGRES_VERSION: ${{ inputs.pg_version }}
         run: |
           echo "GITHUB_PACKAGES_URL=https://maven.pkg.github.com/${GITHUB_REPOSITORY}" >> $GITHUB_ENV
           echo "BOM_ARTIFACT_NAMES=embedded-postgres-binaries-linux-amd64,embedded-postgres-binaries-linux-arm64v8,embedded-postgres-binaries-linux-amd64-alpine,embedded-postgres-binaries-linux-arm64v8-alpine,embedded-postgres-binaries-windows-amd64,embedded-postgres-binaries-windows-arm64v8,embedded-postgres-binaries-darwin-arm64v8" >> $GITHUB_ENV
-          if [ -n "$WINDOWS_ARM64_RELEASE_VERSION" ] && [ "$WINDOWS_ARM64_RELEASE_VERSION" != "$RELEASE_VERSION" ]; then
-            echo "BOM_ARTIFACT_VERSION_OVERRIDES=embedded-postgres-binaries-windows-arm64v8=${WINDOWS_ARM64_RELEASE_VERSION}-postgis-${POSTGIS_VERSION}" >> $GITHUB_ENV
+          RESOLVED_WINDOWS_ARM64_POSTGRES_VERSION=${WINDOWS_ARM64_POSTGRES_VERSION:-$DEFAULT_POSTGRES_VERSION}
+          if [ "$RESOLVED_WINDOWS_ARM64_POSTGRES_VERSION" != "$DEFAULT_POSTGRES_VERSION" ]; then
+            echo "BOM_ARTIFACT_VERSION_OVERRIDES=embedded-postgres-binaries-windows-arm64v8=${RESOLVED_WINDOWS_ARM64_POSTGRES_VERSION}-${POSTGIS_VERSION}" >> $GITHUB_ENV
           fi
       - name: Publish BOM to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ./gradlew :publishBomPublicationToGithubPackagesRepository --info \
-            -Pversion=${{ inputs.release_version }} \
+            -Pversion=${{ inputs.pg_version }}-${{ inputs.postgis_version }} \
             -PpgVersion=${{ inputs.pg_version }} \
             -PpostgisVersion=${{ inputs.postgis_version }} \
             -PpublishTarget=githubPackages \

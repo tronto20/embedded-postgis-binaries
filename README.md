@@ -25,9 +25,12 @@ However, with a little effort, the embedded binaries can also be integrated with
 
 ## Consuming published artifacts
 
-Published versions use the pattern `<release_version>-postgis-<postgis_version>`.
-For example, running the GitHub Packages workflow with `release_version=18.3.0` and `postgis_version=3.6.2`
-produces `18.3.0-postgis-3.6.2`.
+Published versions use the pattern `<pg_version>-<postgis_version>`.
+For example, running the GitHub Packages workflow with `pg_version=18.3` and `postgis_version=3.6.2`
+produces `18.3-3.6.2`.
+
+When `-Pversion` is omitted during local builds, Gradle derives the same artifact version automatically from
+`pgVersion` and `postgisVersion`.
 
 The `embedded-postgres-binaries-bom` artifact manages versions only. Importing the BOM is not enough by itself.
 You still need to declare one or more concrete platform artifacts such as `embedded-postgres-binaries-linux-amd64`
@@ -50,6 +53,16 @@ The manual `Publish GitHub Packages` workflow publishes a matching BOM plus thes
 * `embedded-postgres-binaries-windows-arm64v8`
 * `embedded-postgres-binaries-darwin-arm64v8`
 
+Workflow inputs:
+
+* `pg_version` and `postgis_version` are required
+* `pg_bin_version` is optional and defaults to `<pg_version>-1` for Windows x64
+* `windows_arm64_pg_version` is optional and is only needed when the MSYS2 Windows arm64 package lags behind the other platforms
+
+Supported combinations:
+
+* PostgreSQL `16.x`, `17.x`, and `18.x` support PostGIS `3.4.x`, `3.5.x`, and `3.6.x`
+
 Use the repository URL `https://maven.pkg.github.com/<owner>/<repo>`. Replace `<owner>/<repo>` with the repository that ran the workflow.
 
 Inside GitHub Actions for the same repository, `GITHUB_TOKEN` is enough.
@@ -70,7 +83,7 @@ repositories {
 }
 
 dependencies {
-    implementation platform("io.zonky.test.postgres:embedded-postgres-binaries-bom:18.3.0-postgis-3.6.2")
+    implementation platform("io.zonky.test.postgres:embedded-postgres-binaries-bom:18.3-3.6.2")
 
     implementation "io.zonky.test.postgres:embedded-postgres-binaries-linux-amd64"
     implementation "io.zonky.test.postgres:embedded-postgres-binaries-linux-arm64v8"
@@ -87,7 +100,7 @@ For example, on Apple Silicon macOS:
 
 ```gradle
 dependencies {
-    implementation platform("io.zonky.test.postgres:embedded-postgres-binaries-bom:18.3.0-postgis-3.6.2")
+    implementation platform("io.zonky.test.postgres:embedded-postgres-binaries-bom:18.3-3.6.2")
     implementation "io.zonky.test.postgres:embedded-postgres-binaries-darwin-arm64v8"
 }
 ```
@@ -123,7 +136,7 @@ Then declare the GitHub Packages repository, import the BOM, and add the platfor
         <dependency>
             <groupId>io.zonky.test.postgres</groupId>
             <artifactId>embedded-postgres-binaries-bom</artifactId>
-            <version>18.3.0-postgis-3.6.2</version>
+            <version>18.3-3.6.2</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -186,9 +199,9 @@ Compiling non-native architectures rely on emulation, so it is necessary to regi
 
 Builds all supported artifacts for all supported platforms and architectures, and also builds a BOM to control the versions of postgres binaries.
 
-`./gradlew clean install --parallel -Pversion=18.3.0 -PpgVersion=18.3`
+`./gradlew clean install --parallel -PpgVersion=18.3 -PpostgisVersion=3.6.2`
 
-This repository now targets PostgreSQL 16+ only, and these builds include PostGIS `3.6.2` by default.
+This repository now targets PostgreSQL 16.x, 17.x, and 18.x. Builds always include PostGIS and support the 3.4.x, 3.5.x, and 3.6.x release lines.
 
 Note that the complete build can take a very long time, even a few hours, depending on the performance of the machine on which the build is running.
 
@@ -196,35 +209,38 @@ Note that the complete build can take a very long time, even a few hours, depend
 
 Builds only binaries for a specified platform/submodule.
 
-`./gradlew clean :debian-platforms:install -Pversion=18.3.0 -PpgVersion=18.3`
+`./gradlew clean :debian-platforms:install -PpgVersion=18.3 -PpostgisVersion=3.6.2`
 
 ### Build only a single binary
 
 Builds only a single binary for a specified platform and architecture.
 
-`./gradlew clean install -Pversion=18.3.0 -PpgVersion=18.3 -ParchName=arm64v8 -PdistName=alpine`
+`./gradlew clean install -PpgVersion=18.3 -PpostgisVersion=3.6.2 -ParchName=arm64v8 -PdistName=alpine`
 
-PostgreSQL 16+ builds in this repository always include PostGIS. Use `-PpostgisVersion=3.6.2` only when you want to override the bundled PostGIS version.
+PostgreSQL builds in this repository always include PostGIS. Supported combinations are PostgreSQL 16.x, 17.x, and 18.x with PostGIS 3.4.x, 3.5.x, or 3.6.x.
 
 For Apple Silicon macOS, use the dedicated Darwin build:
 
-`./gradlew :custom-darwin-platform:testCustomDarwinJar -Pversion=18.3.0 -PpgVersion=18.3 -PdistName=darwin -ParchName=arm64v8`
+`./gradlew :custom-darwin-platform:testCustomDarwinJar -PpgVersion=18.3 -PpostgisVersion=3.6.2 -PdistName=darwin -ParchName=arm64v8`
 
 For Windows amd64, use the dedicated Windows build:
 
-`./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=18.3.0 -PpgVersion=18.3 -PdistName=windows -ParchName=amd64`
+`./gradlew :custom-windows-platform:testCustomWindowsJar -PpgVersion=18.3 -PpostgisVersion=3.6.2 -PdistName=windows -ParchName=amd64`
 
 For Windows arm64, use the dedicated Windows ARM build:
 
-`./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=18.2.0 -PpgVersion=18.2 -PdistName=windows -ParchName=arm64v8`
+`./gradlew :custom-windows-platform:testCustomWindowsJar -PpgVersion=18.2 -PpostgisVersion=3.6.2 -PdistName=windows -ParchName=arm64v8`
 
 Optional parameters:
 - *postgisVersion*
   - default value: `3.6.2`
-  - supported values: a postgis version number (only 2.5.2+, 2.4.7+, 2.3.9+ versions are supported; the build scripts automatically select newer PROJ requirements for PostGIS 3.4+ and newer GEOS/GDAL requirements for PostGIS 3.6+)
+  - supported values: `3.4.x`, `3.5.x`, `3.6.x`
+  - note: use the latest patch releases from the supported branches, for example `3.4.5`, `3.5.5`, or `3.6.2`
   - note: the macOS arm64 build currently packages the core PostGIS extension only; raster support is intentionally disabled
 
-If you are targeting PostgreSQL 18, use PostGIS 3.6+.
+- *pgBinVersion*
+  - default value: `<pgVersion>-1`
+  - note: this applies to Windows amd64 only and is usually needed only when the published EnterpriseDB binary suffix does not match the default
 - *archName*
   - default value: `amd64`
   - supported values: `amd64`, `i386`, `arm32v6`, `arm32v7`, `arm64v8`, `ppc64le`
@@ -241,7 +257,7 @@ If you are targeting PostgreSQL 18, use PostGIS 3.6+.
   - default value: executables are resolved from `/usr/bin` directory or downloaded from https://github.com/multiarch/qemu-user-static/releases/download/v2.12.0
   - supported values: a path to a directory containing qemu executables
 
-The milestone-driven `Release` GitHub Actions workflow now uses the default PostGIS-enabled Linux and Alpine build path. The repository also includes manual GitHub Actions workflows for `Publish PostGIS Darwin Artifact`, `Publish PostGIS Windows Artifact`, `Publish PostGIS Windows ARM64 Artifact`, and `Publish GitHub Packages`.
+The milestone-driven `Release` GitHub Actions workflow now publishes versions in the `<pg_version>-<postgis_version>` format and uses the PostGIS-enabled Linux and Alpine build path. The repository also includes manual GitHub Actions workflows for `Publish PostGIS Darwin Artifact`, `Publish PostGIS Windows Artifact`, `Publish PostGIS Windows ARM64 Artifact`, and `Publish GitHub Packages`.
 
 ## License
 The project is released under version 2.0 of the [Apache License](http://www.apache.org/licenses/LICENSE-2.0.html).

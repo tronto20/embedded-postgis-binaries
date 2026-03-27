@@ -5,6 +5,7 @@ plugins {
 }
 
 ext {
+    requestedVersionParam = gradle.startParameter.projectProperties['version']
     ossrhUsername = project.findProperty('ossrh.username')
     ossrhPassword = project.findProperty('ossrh.password')
     publishTargetParam = project.findProperty('publishTarget') ?: 'ossrh'
@@ -27,15 +28,21 @@ ext {
                 [(entry.substring(0, delimiter)) : entry.substring(delimiter + 1)]
             }
 
-    pgVersionParam = project.findProperty('pgVersion') ?: ("${project.version}" - '-SNAPSHOT')
-    pgBinVersionParam = project.findProperty('pgBinVersion') ?: "${pgVersionParam}-1"
+    pgVersionParam = project.findProperty('pgVersion') ?: ''
+    pgBinVersionParam = project.findProperty('pgBinVersion') ?: (pgVersionParam ? "${pgVersionParam}-1" : '')
     pgMajorVersionParam = (pgVersionParam =~ /(\d+).+/).with { matches() ? it[0][1].toInteger() : null }
+    postgisVersionMatcher = (project.findProperty('postgisVersion') ?: '3.6.2') =~ /^(\d+)\.(\d+)(?:\.(\d+))?$/
     postgisVersionParam = project.findProperty('postgisVersion') ?: '3.6.2'
+    postgisMajorVersionParam = postgisVersionMatcher.matches() ? postgisVersionMatcher[0][1].toInteger() : null
+    postgisMinorVersionParam = postgisVersionMatcher.matches() ? postgisVersionMatcher[0][2].toInteger() : null
+    artifactVersionParam = requestedVersionParam ?: (pgVersionParam ? "${pgVersionParam}-${postgisVersionParam}" : null)
     archNameParam = project.findProperty('archName') ?: ''
     distNameParam = project.findProperty('distName') ?: ''
     dockerImageParam = project.findProperty('dockerImage') ?: ''
     qemuPathParam = project.findProperty('qemuPath') ?: ''
 }
+
+version = artifactVersionParam ?: version
 
 allprojects {
     apply plugin: 'java'
@@ -43,7 +50,7 @@ allprojects {
     apply plugin: 'signing'
 
     group = 'io.zonky.test.postgres'
-    version += postgisVersionParam ? "-postgis-$postgisVersionParam" : ''
+    version = rootProject.version
 
     base {
         archivesName = 'embedded-postgres-binaries'
@@ -69,11 +76,20 @@ task validateInputs {
         println "pgVersion:     $pgVersionParam"
         println "pgBinVersion:  $pgBinVersionParam"
 
-        if (!project.version || project.version == 'unspecified') {
-            throw new GradleException("The 'version' property must be set")
+        if (!pgVersionParam) {
+            throw new GradleException("The 'pgVersion' property must be set")
         }
-        if (!pgMajorVersionParam || pgMajorVersionParam < 16) {
-            throw new GradleException("This repository currently supports PostgreSQL 16 or later")
+        if (!project.version || project.version == 'unspecified') {
+            throw new GradleException("The artifact version could not be resolved")
+        }
+        if (requestedVersionParam?.contains('-postgis-')) {
+            throw new GradleException("Use the '<pgVersion>-<postgisVersion>' artifact version format instead of '-postgis-'")
+        }
+        if (!pgMajorVersionParam || pgMajorVersionParam < 16 || pgMajorVersionParam > 18) {
+            throw new GradleException("This repository currently supports PostgreSQL 16, 17, and 18")
+        }
+        if (!postgisMajorVersionParam || postgisMajorVersionParam != 3 || !(postgisMinorVersionParam in [4, 5, 6])) {
+            throw new GradleException("This repository currently supports PostGIS 3.4.x, 3.5.x, and 3.6.x")
         }
         if (project.findProperty('defaultPostgisVersion') != null) {
             throw new GradleException("PostGIS is always enabled; use the 'postgisVersion' property to override the bundled version")

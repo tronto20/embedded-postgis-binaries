@@ -2,14 +2,11 @@ name: Publish PostGIS Windows ARM64 Artifact
 on:
   workflow_dispatch:
     inputs:
-      release_version:
-        description: Artifact version (for example 18.2.0)
-        required: true
       pg_version:
-        description: PostgreSQL version published in MSYS2 clangarm64 (for example 18.2)
+        description: "PostgreSQL version published in MSYS2 clangarm64 (supported: 16.x, 17.x, 18.x; for example 18.2)"
         required: true
       postgis_version:
-        description: PostGIS version published in MSYS2 clangarm64 (for example 3.6.2)
+        description: "PostGIS version published in MSYS2 clangarm64 (supported: 3.4.x, 3.5.x, 3.6.x; for example 3.6.2)"
         required: true
         default: "3.6.2"
 jobs:
@@ -24,8 +21,11 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: 17
+      - name: Set artifact version
+        shell: bash
+        run: echo "RELEASE_VERSION=${{ inputs.pg_version }}-${{ inputs.postgis_version }}" >> $GITHUB_ENV
       - name: Test PostgreSQL/PostGIS bundle
-        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=${{ inputs.release_version }} -PpgVersion=${{ inputs.pg_version }} -PpostgisVersion=${{ inputs.postgis_version }} -PdistName=windows -ParchName=arm64v8
+        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=$RELEASE_VERSION -PpgVersion=${{ inputs.pg_version }} -PpostgisVersion=${{ inputs.postgis_version }} -PdistName=windows -ParchName=arm64v8
         shell: bash
       - name: Publish artifact with Gradle
         env:
@@ -36,7 +36,7 @@ jobs:
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASS }}
         run: |
           ./gradlew :custom-windows-platform:publish --info \
-            -Pversion=${{ inputs.release_version }} \
+            -Pversion=$RELEASE_VERSION \
             -PpgVersion=${{ inputs.pg_version }} \
             -PpostgisVersion=${{ inputs.postgis_version }} \
             -PdistName=windows \

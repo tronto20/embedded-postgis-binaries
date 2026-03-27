@@ -67,18 +67,22 @@ function cleanup() {
 
 trap cleanup EXIT
 
-test "$($PSQL -qAtX -h localhost -p 65432 -U postgres -d postgres -c "SHOW SERVER_VERSION")" = "$PG_VERSION"
-test "$($PSQL -qAtX -h localhost -p 65432 -U postgres -d postgres -c "CREATE EXTENSION pgcrypto; SELECT digest('test', 'sha256');")" = "\x9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+psql_scalar() {
+  "$PSQL" -qAtX -h localhost -p 65432 -U postgres -d postgres -c "$1" | tr -d '\r'
+}
+
+test "$(psql_scalar "SHOW SERVER_VERSION")" = "$PG_VERSION"
+test "$(psql_scalar "CREATE EXTENSION pgcrypto; SELECT digest('test', 'sha256');")" = "\x9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
 if [ -f "$UUID_OSSP_CONTROL" ] ; then
-  echo "$($PSQL -qAtX -h localhost -p 65432 -U postgres -d postgres -c 'CREATE EXTENSION "uuid-ossp"; SELECT uuid_generate_v4();')" | grep -E '^[^-]{8}-[^-]{4}-[^-]{4}-[^-]{4}-[^-]{12}$'
+  echo "$(psql_scalar 'CREATE EXTENSION "uuid-ossp"; SELECT uuid_generate_v4();')" | grep -E '^[^-]{8}-[^-]{4}-[^-]{4}-[^-]{4}-[^-]{12}$'
 fi
 
 if echo "$PG_VERSION" | grep -qvE '^(10|9)\.' ; then
-  count=$($PSQL -qAtX -h localhost -p 65432 -U postgres -d postgres -c 'SET jit_above_cost = 10; SELECT SUM(relpages) FROM pg_class;')
+  count=$(psql_scalar 'SET jit_above_cost = 10; SELECT SUM(relpages) FROM pg_class;')
   test "$count" -gt 0
 fi
 
 if [ -n "$POSTGIS_VERSION" ] ; then
-  test "$($PSQL -qAtX -h localhost -p 65432 -U postgres -d postgres -c "CREATE EXTENSION postgis; SELECT PostGIS_Lib_Version();")" = "$POSTGIS_VERSION"
-  test "$($PSQL -qAtX -h localhost -p 65432 -U postgres -d postgres -c "SELECT ST_AsText(ST_Transform(\$\$SRID=4326;POINT(0 0)\$\$::geometry, 3857));")" = "POINT(0 0)"
+  test "$(psql_scalar "CREATE EXTENSION postgis; SELECT PostGIS_Lib_Version();")" = "$POSTGIS_VERSION"
+  test "$(psql_scalar "SELECT ST_AsText(ST_Transform(\$\$SRID=4326;POINT(0 0)\$\$::geometry, 3857));")" = "POINT(0 0)"
 fi
