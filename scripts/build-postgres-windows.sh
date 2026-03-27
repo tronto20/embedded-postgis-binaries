@@ -57,6 +57,26 @@ download_if_missing() {
   fi
 }
 
+ensure_zstd() {
+  if command -v zstd >/dev/null 2>&1 ; then
+    return 0
+  fi
+
+  if command -v choco >/dev/null 2>&1 ; then
+    # MSYS2 clangarm64 package databases and packages are zstd-compressed.
+    # Windows ARM runners do not ship zstd by default, so install the CLI once.
+    choco install zstandard -y --no-progress
+    export PATH="$PATH:/c/ProgramData/chocolatey/bin"
+    hash -r || true
+  fi
+
+  if command -v zstd >/dev/null 2>&1 ; then
+    return 0
+  fi
+
+  echo "zstd is required to extract MSYS2 arm64 package metadata and archives!" && exit 1;
+}
+
 build_amd64_bundle() {
   local edb_zip="$DIST_DIR/postgresql-$PG_BIN_VERSION-windows-x64-binaries.zip"
   local postgis_zip="$DIST_DIR/postgis-bundle-pg${PG_MAJOR}-${POSTGIS_VERSION}x64.zip"
@@ -220,6 +240,7 @@ build_arm64_bundle() {
   local postgis_version
 
   download_if_missing "$db_file" "$repo_url/clangarm64.db"
+  ensure_zstd
 
   rm -rf "$PKG_DIR"
   mkdir -p "$db_dir" "$stage_dir" "$TRG_DIR"

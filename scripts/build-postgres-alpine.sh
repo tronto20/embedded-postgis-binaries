@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euxo pipefail
+set -eux
 
 DOCKER_OPTS=
 POSTGIS_VERSION=
