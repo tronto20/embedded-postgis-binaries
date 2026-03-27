@@ -173,9 +173,9 @@ jobs:
         with:
           name: ppc64leAlpineBundle
           path: alpine-platforms/build/tmp/buildPpc64leAlpineBundle/bundle/postgres-linux-alpine_linux.txz
-  release:
-    name: Collect artifacts & Release ${{ github.event.milestone.title }}
-    needs: [debian-arm32v7, debian-arm64v8, debian-ppc64le, alpine-arm32v6, alpine-arm64v8, alpine-ppc64le]
+  publish-debian:
+    name: Publish Debian artifacts for ${{ github.event.milestone.title }}
+    needs: [debian-arm32v7, debian-arm64v8, debian-ppc64le]
     if: ${{ !failure() }}
     runs-on: ubuntu-latest
     steps:
@@ -213,6 +213,48 @@ jobs:
         with:
           name: ppc64leDebianBundle
           path: debian-platforms/build/tmp/buildPpc64leDebianBundle/bundle
+      - name: Publish Debian artifacts
+        env:
+          MAVEN_USER: ${{ secrets.MAVEN_USER }}
+          MAVEN_PASS: ${{ secrets.MAVEN_PASS }}
+          ORG_GRADLE_PROJECT_signingKeyId: ${{ secrets.SIGNING_KEY_ID }}
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_CERT }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASS }}
+        run: |
+          ./gradlew \
+            :debian-platforms:publishArm32v7DebianPublicationToMavenRepository \
+            :debian-platforms:publishArm64v8DebianPublicationToMavenRepository \
+            :debian-platforms:publishPpc64leDebianPublicationToMavenRepository \
+            --info \
+            -x buildArm32v7DebianBundle \
+            -x buildArm64v8DebianBundle \
+            -x buildPpc64leDebianBundle \
+            -Possrh.username=$MAVEN_USER \
+            -Possrh.password=$MAVEN_PASS \
+            -Pversion=$RELEASE_VERSION \
+            -PpgVersion=$POSTGRES_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION
+  publish-alpine:
+    name: Publish Alpine artifacts for ${{ github.event.milestone.title }}
+    needs: [alpine-arm32v6, alpine-arm64v8, alpine-ppc64le, publish-debian]
+    if: ${{ !failure() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: master
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Set environment variables
+        env:
+          MILESTONE_VERSION: ${{ github.event.milestone.title }}
+        run: |
+          echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
       - name: Download bundle - arm32v6Alpine
         uses: actions/download-artifact@v4
         with:
@@ -228,7 +270,7 @@ jobs:
         with:
           name: ppc64leAlpineBundle
           path: alpine-platforms/build/tmp/buildPpc64leAlpineBundle/bundle
-      - name: Release with Gradle
+      - name: Publish Alpine artifacts
         env:
           MAVEN_USER: ${{ secrets.MAVEN_USER }}
           MAVEN_PASS: ${{ secrets.MAVEN_PASS }}
@@ -236,18 +278,74 @@ jobs:
           ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_CERT }}
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASS }}
         run: |
-          ./gradlew uploadArchives --info \
-            -x buildArm32v7DebianBundle \
-            -x buildArm64v8DebianBundle \
-            -x buildPpc64leDebianBundle \
+          ./gradlew \
+            :alpine-platforms:publishArm32v6AlpinePublicationToMavenRepository \
+            :alpine-platforms:publishArm64v8AlpinePublicationToMavenRepository \
+            :alpine-platforms:publishPpc64leAlpinePublicationToMavenRepository \
+            --info \
             -x buildArm32v6AlpineBundle \
             -x buildArm64v8AlpineBundle \
             -x buildPpc64leAlpineBundle \
+            -Possrh.username=$MAVEN_USER \
+            -Possrh.password=$MAVEN_PASS \
+            -Pversion=$RELEASE_VERSION \
+            -PpgVersion=$POSTGRES_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION
+  publish-bom:
+    name: Publish BOM for ${{ github.event.milestone.title }}
+    needs: [publish-alpine]
+    if: ${{ !failure() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: master
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Set environment variables
+        env:
+          MILESTONE_VERSION: ${{ github.event.milestone.title }}
+        run: |
+          echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
+      - name: Publish BOM
+        env:
+          MAVEN_USER: ${{ secrets.MAVEN_USER }}
+          MAVEN_PASS: ${{ secrets.MAVEN_PASS }}
+          ORG_GRADLE_PROJECT_signingKeyId: ${{ secrets.SIGNING_KEY_ID }}
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_CERT }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASS }}
+        run: |
+          ./gradlew publishBomPublicationToMavenRepository --info \
             -Pversion=$RELEASE_VERSION \
             -PpgVersion=$POSTGRES_VERSION \
             -PpostgisVersion=$POSTGIS_VERSION \
             -Possrh.username=$MAVEN_USER \
             -Possrh.password=$MAVEN_PASS
+  release:
+    name: Finalize Release ${{ github.event.milestone.title }}
+    needs: [publish-bom]
+    if: ${{ !failure() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: master
+      - name: Set up Git
+        run: |
+          git config user.name "Zonky Bot"
+          git config user.email "bot@zonky.com"
+      - name: Set environment variables
+        env:
+          MILESTONE_VERSION: ${{ github.event.milestone.title }}
+        run: |
+          echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
       - name: Upload staged artifacts to Central Sonatype
         env:
           SONATYPE_USERNAME: ${{ secrets.MAVEN_USER }}
