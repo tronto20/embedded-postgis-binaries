@@ -5,10 +5,10 @@ on:
   workflow_dispatch:
     inputs:
       pg_version:
-        description: "PostgreSQL version to test (supported: 16.x, 17.x, 18.x; for example 18.3)"
+        description: "PostgreSQL version or branch to test (16, 17, 18, or an exact patch like 18.3)"
         required: true
       postgis_version:
-        description: "PostGIS version to test (supported: 3.4.x, 3.5.x, 3.6.x; for example 3.6.2)"
+        description: "PostGIS version or branch to test (3.4, 3.5, 3.6, or an exact patch like 3.6.2)"
         required: false
         default: "3.6.2"
       pg_bin_version:
@@ -20,7 +20,7 @@ on:
         type: boolean
         default: false
       windows_arm64_pg_version:
-        description: "Optional PostgreSQL version override for Windows arm64 when MSYS2 lags behind"
+        description: "Optional PostgreSQL version or branch override for Windows arm64 when MSYS2 lags behind"
         required: false
 jobs:
   resolve-inputs:
@@ -33,6 +33,13 @@ jobs:
       include_windows_arm64: ${{ steps.resolve.outputs.include_windows_arm64 }}
       windows_arm64_pg_version: ${{ steps.resolve.outputs.windows_arm64_pg_version }}
     steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
       - name: Resolve effective values
         id: resolve
         shell: bash
@@ -44,12 +51,31 @@ jobs:
           INPUT_INCLUDE_WINDOWS_ARM64: ${{ inputs.include_windows_arm64 }}
           INPUT_WINDOWS_ARM64_PG_VERSION: ${{ inputs.windows_arm64_pg_version }}
         run: |
+          extract_resolved_value() {
+            local output=$1
+            local key=$2
+            printf '%s\n' "$output" | sed -n "s/^${key}=//p" | head -n1
+          }
+
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "postgres_matrix=[\"$INPUT_PG_VERSION\"]" >> "$GITHUB_OUTPUT"
-            echo "postgis_version=${INPUT_POSTGIS_VERSION:-3.6.2}" >> "$GITHUB_OUTPUT"
-            echo "windows_pg_bin_version=${INPUT_PG_BIN_VERSION:-${INPUT_PG_VERSION}-1}" >> "$GITHUB_OUTPUT"
-            echo "include_windows_arm64=${INPUT_INCLUDE_WINDOWS_ARM64:-false}" >> "$GITHUB_OUTPUT"
-            echo "windows_arm64_pg_version=${INPUT_WINDOWS_ARM64_PG_VERSION:-$INPUT_PG_VERSION}" >> "$GITHUB_OUTPUT"
+            RESOLVED_OUTPUT=$(./gradlew -q --console=plain printResolvedVersions -PpgVersion="$INPUT_PG_VERSION" -PpostgisVersion="${INPUT_POSTGIS_VERSION:-3.6.2}")
+            RESOLVED_PG_VERSION=$(extract_resolved_value "$RESOLVED_OUTPUT" resolved_pg_version)
+            RESOLVED_POSTGIS_VERSION=$(extract_resolved_value "$RESOLVED_OUTPUT" resolved_postgis_version)
+            INCLUDE_WINDOWS_ARM64=${INPUT_INCLUDE_WINDOWS_ARM64:-false}
+
+            echo "postgres_matrix=[\"$RESOLVED_PG_VERSION\"]" >> "$GITHUB_OUTPUT"
+            echo "postgis_version=$RESOLVED_POSTGIS_VERSION" >> "$GITHUB_OUTPUT"
+            echo "windows_pg_bin_version=${INPUT_PG_BIN_VERSION:-${RESOLVED_PG_VERSION}-1}" >> "$GITHUB_OUTPUT"
+            echo "include_windows_arm64=$INCLUDE_WINDOWS_ARM64" >> "$GITHUB_OUTPUT"
+
+            if [ "$INCLUDE_WINDOWS_ARM64" = "true" ]; then
+              WINDOWS_ARM64_SPEC=${INPUT_WINDOWS_ARM64_PG_VERSION:-$INPUT_PG_VERSION}
+              WINDOWS_ARM64_OUTPUT=$(./gradlew -q --console=plain printResolvedVersions -PpgVersion="$WINDOWS_ARM64_SPEC" -PpostgisVersion="$RESOLVED_POSTGIS_VERSION" -PdistName=windows -ParchName=arm64v8)
+              RESOLVED_WINDOWS_ARM64_PG_VERSION=$(extract_resolved_value "$WINDOWS_ARM64_OUTPUT" resolved_pg_version)
+              echo "windows_arm64_pg_version=$RESOLVED_WINDOWS_ARM64_PG_VERSION" >> "$GITHUB_OUTPUT"
+            else
+              echo "windows_arm64_pg_version=" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo 'postgres_matrix=["18.3","17.9","16.13"]' >> "$GITHUB_OUTPUT"
             echo "postgis_version=3.6.2" >> "$GITHUB_OUTPUT"

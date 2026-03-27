@@ -29,8 +29,12 @@ Published versions use the pattern `<pg_version>-<postgis_version>`.
 For example, running the GitHub Packages workflow with `pg_version=18.3` and `postgis_version=3.6.2`
 produces `18.3-3.6.2`.
 
+The manual workflows also accept release branches. For example, `pg_version=18` resolves to the latest published PostgreSQL 18 patch release, and `postgis_version=3.4` resolves to the latest published PostGIS 3.4 patch release before the build starts.
+
 When `-Pversion` is omitted during local builds, Gradle derives the same artifact version automatically from
 `pgVersion` and `postgisVersion`.
+
+Local Gradle builds also accept release branches. For example, `-PpgVersion=17 -PpostgisVersion=3.4` resolves to the latest supported patch releases before the build is configured. For Windows arm64, the PostgreSQL branch is resolved against the versions currently published in MSYS2 `clangarm64`.
 
 The `embedded-postgres-binaries-bom` artifact manages versions only. Importing the BOM is not enough by itself.
 You still need to declare one or more concrete platform artifacts such as `embedded-postgres-binaries-linux-amd64`
@@ -57,6 +61,8 @@ By default the workflow publishes these six artifacts and the matching BOM. If y
 Workflow inputs:
 
 * `pg_version` and `postgis_version` are required
+* `pg_version` may be either a branch such as `16`, `17`, or `18`, or an exact patch release such as `18.3`
+* `postgis_version` may be either a branch such as `3.4`, `3.5`, or `3.6`, or an exact patch release such as `3.6.2`
 * `pg_bin_version` is optional and defaults to `<pg_version>-1` for Windows x64
 * `include_windows_arm64` is optional and defaults to `false`
 * `windows_arm64_pg_version` is optional and is only needed when you explicitly opt in to the Windows arm64 path
@@ -224,6 +230,10 @@ Builds only a single binary for a specified platform and architecture.
 PostgreSQL builds in this repository always include PostGIS. Supported combinations are PostgreSQL 16.x, 17.x, and 18.x with PostGIS 3.4.x, 3.5.x, or 3.6.x.
 The supported cross-platform core feature set includes coordinate transforms, MVT, and Geobuf support.
 
+For local Gradle builds, you can pass either exact patch versions or release branches:
+
+`./gradlew :debian-platforms:testAmd64DebianJar -PpgVersion=17 -PpostgisVersion=3.4`
+
 For Apple Silicon macOS, use the dedicated Darwin build:
 
 `./gradlew :custom-darwin-platform:testCustomDarwinJar -PpgVersion=18.3 -PpostgisVersion=3.6.2 -PdistName=darwin -ParchName=arm64v8`
@@ -271,6 +281,12 @@ Optional parameters:
 The milestone-driven `Release` GitHub Actions workflow now publishes versions in the `<pg_version>-<postgis_version>` format and uses the PostGIS-enabled Linux and Alpine build path. The repository also includes manual GitHub Actions workflows for `Checks`, `Publish PostGIS Darwin Artifact`, `Publish PostGIS Windows Artifact`, `Publish PostGIS Windows ARM64 Artifact`, and `Publish GitHub Packages`.
 
 The manual `Checks` workflow accepts `pg_version` and `postgis_version` so you can verify a specific PostgreSQL/PostGIS combination before publishing. It also supports optional `pg_bin_version`, `include_windows_arm64`, and `windows_arm64_pg_version` inputs for the Windows paths. `include_windows_arm64` now defaults to `false`.
+
+For the manual workflows, branch inputs are resolved automatically before Gradle runs:
+
+* `pg_version=17` resolves to the latest published PostgreSQL 17 patch release
+* `postgis_version=3.5` resolves to the latest published PostGIS 3.5 patch release
+* the experimental Windows arm64 workflow resolves `pg_version` against the versions currently published in MSYS2 `clangarm64`
 
 ## License
 The project is released under version 2.0 of the [Apache License](http://www.apache.org/licenses/LICENSE-2.0.html).

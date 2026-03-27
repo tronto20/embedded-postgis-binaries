@@ -4,6 +4,110 @@ plugins {
     id "de.undercouch.download" version "4.1.1"
 }
 
+def versionIndexCache = [:]
+
+def normalizeVersionSpec = { String spec ->
+    def value = (spec ?: '').trim()
+    value.endsWith('.x') ? value[0..-3] : value
+}
+
+def versionComponents = { String version ->
+    version.tokenize('.').collect { it.toInteger() }
+}
+
+def compareVersionComponents = { List<Integer> left, List<Integer> right ->
+    def maxSize = Math.max(left.size(), right.size())
+    for (int i = 0; i < maxSize; i++) {
+        def leftValue = i < left.size() ? left[i] : 0
+        def rightValue = i < right.size() ? right[i] : 0
+        if (leftValue != rightValue) {
+            return leftValue <=> rightValue
+        }
+    }
+    0
+}
+
+def fetchIndexedVersions = { String cacheKey, String url, String regex ->
+    if (versionIndexCache.containsKey(cacheKey)) {
+        return versionIndexCache[cacheKey]
+    }
+
+    def connection = new URL(url).openConnection()
+    connection.setConnectTimeout(30000)
+    connection.setReadTimeout(30000)
+    connection.setRequestProperty('User-Agent', 'embedded-postgres-binaries-version-resolver/1.0')
+    def html = connection.inputStream.getText('UTF-8')
+    def versions = ((html =~ regex).collect { it[1] } as Set).toList().sort { left, right ->
+        compareVersionComponents(versionComponents(right), versionComponents(left))
+    }
+    versionIndexCache[cacheKey] = versions
+    versions
+}
+
+def resolvePostgresVersionSpec = { String requestedSpec, boolean windowsArm64 = false ->
+    def spec = normalizeVersionSpec(requestedSpec)
+    if (!spec) {
+        return spec
+    }
+    if (spec ==~ /^\d+\.\d+$/) {
+        return spec
+    }
+    if (!(spec ==~ /^\d+$/)) {
+        throw new GradleException("PostgreSQL versions must be a major branch like '17' or an exact patch release like '17.9'")
+    }
+    if (gradle.startParameter.offline) {
+        throw new GradleException("Cannot resolve the PostgreSQL branch '$requestedSpec' in offline mode; specify an exact patch release instead")
+    }
+
+    def versions = windowsArm64
+            ? fetchIndexedVersions(
+                    'windows-arm64-postgres',
+                    'https://mirror.msys2.org/mingw/clangarm64/',
+                    /mingw-w64-clang-aarch64-postgresql(?:-\d+)?-(\d+\.\d+)-\d+-any\.pkg\.tar\.zst/)
+            : fetchIndexedVersions(
+                    'postgres',
+                    'https://ftp.postgresql.org/pub/source/',
+                    /href="v(\d+\.\d+)\/"/)
+
+    def resolved = versions.find { it.startsWith("${spec}.") }
+    if (!resolved) {
+        throw new GradleException("Unable to resolve the latest PostgreSQL patch release for branch '$requestedSpec'")
+    }
+    resolved
+}
+
+def resolvePostgisVersionSpec = { String requestedSpec, boolean windowsArm64 = false ->
+    def spec = normalizeVersionSpec(requestedSpec)
+    if (!spec) {
+        return spec
+    }
+    if (spec ==~ /^\d+\.\d+\.\d+$/) {
+        return spec
+    }
+    if (!(spec ==~ /^\d+\.\d+$/)) {
+        throw new GradleException("PostGIS versions must be a release branch like '3.6' or an exact patch release like '3.6.2'")
+    }
+    if (gradle.startParameter.offline) {
+        throw new GradleException("Cannot resolve the PostGIS branch '$requestedSpec' in offline mode; specify an exact patch release instead")
+    }
+
+    def versions = windowsArm64
+            ? fetchIndexedVersions(
+                    'windows-arm64-postgis',
+                    'https://mirror.msys2.org/mingw/clangarm64/',
+                    /mingw-w64-clang-aarch64-postgis-(\d+\.\d+\.\d+)-\d+-any\.pkg\.tar\.zst/)
+            : fetchIndexedVersions(
+                    'postgis',
+                    'https://postgis.net/stuff/',
+                    /href="postgis-(\d+\.\d+\.\d+)\.tar\.gz"/)
+
+    def resolved = versions.find { it.startsWith("${spec}.") }
+    if (!resolved) {
+        throw new GradleException("Unable to resolve the latest PostGIS patch release for branch '$requestedSpec'")
+    }
+    resolved
+}
+
 ext {
     requestedVersionParam = gradle.startParameter.projectProperties['version']
     ossrhUsername = project.findProperty('ossrh.username')
@@ -28,11 +132,14 @@ ext {
                 [(entry.substring(0, delimiter)) : entry.substring(delimiter + 1)]
             }
 
-    pgVersionParam = project.findProperty('pgVersion') ?: ''
+    requestedPgVersionParam = project.findProperty('pgVersion') ?: ''
+    requestedPostgisVersionParam = project.findProperty('postgisVersion') ?: '3.6.2'
+    windowsArm64TargetParam = project.findProperty('distName') == 'windows' && project.findProperty('archName') == 'arm64v8'
+    pgVersionParam = resolvePostgresVersionSpec(requestedPgVersionParam as String, windowsArm64TargetParam)
     pgBinVersionParam = project.findProperty('pgBinVersion') ?: (pgVersionParam ? "${pgVersionParam}-1" : '')
     pgMajorVersionParam = (pgVersionParam =~ /(\d+).+/).with { matches() ? it[0][1].toInteger() : null }
-    postgisVersionMatcher = (project.findProperty('postgisVersion') ?: '3.6.2') =~ /^(\d+)\.(\d+)(?:\.(\d+))?$/
-    postgisVersionParam = project.findProperty('postgisVersion') ?: '3.6.2'
+    postgisVersionParam = resolvePostgisVersionSpec(requestedPostgisVersionParam as String, windowsArm64TargetParam)
+    postgisVersionMatcher = postgisVersionParam =~ /^(\d+)\.(\d+)(?:\.(\d+))?$/
     postgisMajorVersionParam = postgisVersionMatcher.matches() ? postgisVersionMatcher[0][1].toInteger() : null
     postgisMinorVersionParam = postgisVersionMatcher.matches() ? postgisVersionMatcher[0][2].toInteger() : null
     artifactVersionParam = requestedVersionParam ?: (pgVersionParam ? "${pgVersionParam}-${postgisVersionParam}" : null)
@@ -73,8 +180,11 @@ allprojects {
 task validateInputs {
     doFirst {
         println "version:       ${project.version}"
+        println "requestedPgVersion: ${requestedPgVersionParam}"
         println "pgVersion:     $pgVersionParam"
         println "pgBinVersion:  $pgBinVersionParam"
+        println "requestedPostgisVersion: ${requestedPostgisVersionParam}"
+        println "postgisVersion: $postgisVersionParam"
 
         if (!pgVersionParam) {
             throw new GradleException("The 'pgVersion' property must be set")
@@ -127,6 +237,17 @@ task validateInputs {
                 throw new GradleException("The 'darwin' distribution currently requires an Apple Silicon macOS host")
             }
         }
+    }
+}
+
+task printResolvedVersions {
+    doLast {
+        println "resolved_requested_pg_version=${requestedPgVersionParam}"
+        println "resolved_pg_version=${pgVersionParam}"
+        println "resolved_pg_bin_version=${pgBinVersionParam}"
+        println "resolved_requested_postgis_version=${requestedPostgisVersionParam}"
+        println "resolved_postgis_version=${postgisVersionParam}"
+        println "resolved_artifact_version=${project.version}"
     }
 }
 

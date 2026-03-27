@@ -3,15 +3,51 @@ on:
   workflow_dispatch:
     inputs:
       pg_version:
-        description: "PostgreSQL version published in MSYS2 clangarm64 (supported: 16.x, 17.x, 18.x; for example 18.2)"
+        description: "PostgreSQL version or branch published in MSYS2 clangarm64 (16, 17, 18, or an exact patch like 18.2)"
         required: true
       postgis_version:
-        description: "PostGIS version published in MSYS2 clangarm64 (supported: 3.4.x, 3.5.x, 3.6.x; for example 3.6.2)"
+        description: "PostGIS version or branch published in MSYS2 clangarm64 (3.5, 3.6, or an exact patch like 3.6.2)"
         required: true
         default: "3.6.2"
 jobs:
+  resolve-inputs:
+    name: Resolve workflow inputs
+    runs-on: ubuntu-latest
+    outputs:
+      postgres_version: ${{ steps.resolve.outputs.postgres_version }}
+      postgis_version: ${{ steps.resolve.outputs.postgis_version }}
+      release_version: ${{ steps.resolve.outputs.release_version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Resolve effective values
+        id: resolve
+        shell: bash
+        env:
+          INPUT_PG_VERSION: ${{ inputs.pg_version }}
+          INPUT_POSTGIS_VERSION: ${{ inputs.postgis_version }}
+        run: |
+          extract_resolved_value() {
+            local output=$1
+            local key=$2
+            printf '%s\n' "$output" | sed -n "s/^${key}=//p" | head -n1
+          }
+
+          RESOLVED_OUTPUT=$(./gradlew -q --console=plain printResolvedVersions -PpgVersion="$INPUT_PG_VERSION" -PpostgisVersion="$INPUT_POSTGIS_VERSION" -PdistName=windows -ParchName=arm64v8)
+          RESOLVED_PG_VERSION=$(extract_resolved_value "$RESOLVED_OUTPUT" resolved_pg_version)
+          RESOLVED_POSTGIS_VERSION=$(extract_resolved_value "$RESOLVED_OUTPUT" resolved_postgis_version)
+          echo "postgres_version=$RESOLVED_PG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "postgis_version=$RESOLVED_POSTGIS_VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_version=${RESOLVED_PG_VERSION}-${RESOLVED_POSTGIS_VERSION}" >> "$GITHUB_OUTPUT"
+
   publish-windows-arm64:
     name: Publish Windows arm64
+    needs: resolve-inputs
     runs-on: windows-11-arm
     steps:
       - name: Checkout code
@@ -23,9 +59,9 @@ jobs:
           java-version: 17
       - name: Set artifact version
         shell: bash
-        run: echo "RELEASE_VERSION=${{ inputs.pg_version }}-${{ inputs.postgis_version }}" >> $GITHUB_ENV
+        run: echo "RELEASE_VERSION=${{ needs.resolve-inputs.outputs.release_version }}" >> $GITHUB_ENV
       - name: Test PostgreSQL/PostGIS bundle
-        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=$RELEASE_VERSION -PpgVersion=${{ inputs.pg_version }} -PpostgisVersion=${{ inputs.postgis_version }} -PdistName=windows -ParchName=arm64v8
+        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=$RELEASE_VERSION -PpgVersion=${{ needs.resolve-inputs.outputs.postgres_version }} -PpostgisVersion=${{ needs.resolve-inputs.outputs.postgis_version }} -PdistName=windows -ParchName=arm64v8
         shell: bash
       - name: Publish artifact with Gradle
         env:
@@ -37,8 +73,8 @@ jobs:
         run: |
           ./gradlew :custom-windows-platform:publish --info \
             -Pversion=$RELEASE_VERSION \
-            -PpgVersion=${{ inputs.pg_version }} \
-            -PpostgisVersion=${{ inputs.postgis_version }} \
+            -PpgVersion=${{ needs.resolve-inputs.outputs.postgres_version }} \
+            -PpostgisVersion=${{ needs.resolve-inputs.outputs.postgis_version }} \
             -PdistName=windows \
             -ParchName=arm64v8 \
             -Possrh.username=$MAVEN_USER \
