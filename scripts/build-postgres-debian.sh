@@ -120,7 +120,7 @@ $DOCKER_OPTS $IMG_NAME /bin/bash -ex -c 'echo "Starting building postgres binari
     && make -C contrib install \
     \
     && if [ -n "$POSTGIS_VERSION" ]; then \
-      apt-get install -y --no-install-recommends curl gettext libjson-c-dev libsqlite3-0 libsqlite3-dev sqlite3 unzip \
+      apt-get install -y --no-install-recommends curl gettext libjson-c-dev libprotobuf-c-dev libprotobuf-c1 protobuf-c-compiler libsqlite3-0 libsqlite3-dev sqlite3 unzip \
       && mkdir -p /usr/src/proj \
         && curl -sL "https://download.osgeo.org/proj/proj-$PROJ_VERSION.tar.gz" | tar -xzf - -C /usr/src/proj --strip-components 1 \
         && cd /usr/src/proj \
@@ -173,7 +173,7 @@ $DOCKER_OPTS $IMG_NAME /bin/bash -ex -c 'echo "Starting building postgres binari
     && cp /lib/*/libz.so.1 /lib/*/liblzma.so.5 /usr/lib/*/libxml2.so.2 /usr/lib/*/libxslt.so.1 ./lib \
     && cp /lib/*/libssl.so.1* /lib/*/libcrypto.so.1* ./lib || cp /usr/lib/*/libssl.so.1* /usr/lib/*/libcrypto.so.1* ./lib \
     && if [ "$ICU_ENABLED" = true ]; then cp --no-dereference /usr/lib/*/libicudata.so* /usr/lib/*/libicuuc.so* /usr/lib/*/libicui18n.so* ./lib; fi \
-    && if [ -n "$POSTGIS_VERSION" ]; then cp --no-dereference /lib/*/libjson-c.so* /usr/lib/*/libsqlite3.so* ./lib ; fi \
+    && if [ -n "$POSTGIS_VERSION" ]; then cp --no-dereference /lib/*/libjson-c.so* /usr/lib/*/libsqlite3.so* /usr/lib/*/libprotobuf-c.so* ./lib ; fi \
     && find ./bin -type f \( -name "initdb" -o -name "pg_ctl" -o -name "postgres" \) -print0 | xargs -0 -n1 patchelf --set-rpath "\$ORIGIN/../lib" \
     && find ./lib -maxdepth 1 -type f -name "*.so*" -print0 | xargs -0 -n1 patchelf --set-rpath "\$ORIGIN" \
     && find ./lib/postgresql -maxdepth 1 -type f -name "*.so*" -print0 | xargs -0 -n1 patchelf --set-rpath "\$ORIGIN/.." \

@@ -221,6 +221,7 @@ Builds only a single binary for a specified platform and architecture.
 `./gradlew clean install -PpgVersion=18.3 -PpostgisVersion=3.6.2 -ParchName=arm64v8 -PdistName=alpine`
 
 PostgreSQL builds in this repository always include PostGIS. Supported combinations are PostgreSQL 16.x, 17.x, and 18.x with PostGIS 3.4.x, 3.5.x, or 3.6.x.
+The supported cross-platform core feature set includes coordinate transforms, MVT, and Geobuf support.
 
 For Apple Silicon macOS, use the dedicated Darwin build:
 

@@ -82,6 +82,7 @@ ensure_formula_installed libxslt
 ensure_formula_installed icu4c
 ensure_formula_installed geos
 ensure_formula_installed json-c
+ensure_formula_installed protobuf-c
 ensure_formula_installed e2fsprogs
 
 BISON_PREFIX=$(resolve_brew_prefix bison)
@@ -93,14 +94,15 @@ LIBXSLT_PREFIX=$(resolve_brew_prefix libxslt)
 ICU_PREFIX=$(resolve_brew_prefix icu4c icu4c@78 icu4c@77)
 GEOS_PREFIX=$(resolve_brew_prefix geos)
 JSONC_PREFIX=$(resolve_brew_prefix json-c)
+PROTOBUFC_PREFIX=$(resolve_brew_prefix protobuf-c)
 E2FS_PREFIX=$(resolve_brew_prefix e2fsprogs)
 
-export PATH="$PREFIX/bin:$BISON_PREFIX/bin:$FLEX_PREFIX/bin:$PKGCONF_PREFIX/bin:$LIBXML2_PREFIX/bin:$LIBXSLT_PREFIX/bin:$GEOS_PREFIX/bin:$PATH"
+export PATH="$PREFIX/bin:$BISON_PREFIX/bin:$FLEX_PREFIX/bin:$PKGCONF_PREFIX/bin:$LIBXML2_PREFIX/bin:$LIBXSLT_PREFIX/bin:$GEOS_PREFIX/bin:$PROTOBUFC_PREFIX/bin:$PATH"
 export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
 export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-13.0}
-export CPPFLAGS="-I$OPENSSL_PREFIX/include -I$LIBXML2_PREFIX/include/libxml2 -I$LIBXSLT_PREFIX/include -I$ICU_PREFIX/include -I$JSONC_PREFIX/include -I$E2FS_PREFIX/include"
-export LDFLAGS="-L$OPENSSL_PREFIX/lib -L$LIBXML2_PREFIX/lib -L$LIBXSLT_PREFIX/lib -L$ICU_PREFIX/lib -L$JSONC_PREFIX/lib -L$E2FS_PREFIX/lib"
-export PKG_CONFIG_PATH="$OPENSSL_PREFIX/lib/pkgconfig:$LIBXML2_PREFIX/lib/pkgconfig:$LIBXSLT_PREFIX/lib/pkgconfig:$ICU_PREFIX/lib/pkgconfig:$JSONC_PREFIX/lib/pkgconfig:$E2FS_PREFIX/lib/pkgconfig"
+export CPPFLAGS="-I$OPENSSL_PREFIX/include -I$LIBXML2_PREFIX/include/libxml2 -I$LIBXSLT_PREFIX/include -I$ICU_PREFIX/include -I$JSONC_PREFIX/include -I$PROTOBUFC_PREFIX/include -I$E2FS_PREFIX/include"
+export LDFLAGS="-L$OPENSSL_PREFIX/lib -L$LIBXML2_PREFIX/lib -L$LIBXSLT_PREFIX/lib -L$ICU_PREFIX/lib -L$JSONC_PREFIX/lib -L$PROTOBUFC_PREFIX/lib -L$E2FS_PREFIX/lib"
+export PKG_CONFIG_PATH="$OPENSSL_PREFIX/lib/pkgconfig:$LIBXML2_PREFIX/lib/pkgconfig:$LIBXSLT_PREFIX/lib/pkgconfig:$ICU_PREFIX/lib/pkgconfig:$JSONC_PREFIX/lib/pkgconfig:$PROTOBUFC_PREFIX/lib/pkgconfig:$E2FS_PREFIX/lib/pkgconfig"
 
 curl -sSL "https://ftp.postgresql.org/pub/source/v$PG_VERSION/postgresql-$PG_VERSION.tar.bz2" | tar -xjf - -C "$SRC_DIR"
 cd "$SRC_DIR/postgresql-$PG_VERSION"
@@ -142,7 +144,6 @@ ln -sf ../build-aux/install-sh config/install-sh
     --with-geosconfig="$GEOS_PREFIX/bin/geos-config" \
     --with-projdir="$PREFIX" \
     --with-jsondir="$JSONC_PREFIX" \
-    --without-protobuf \
     --without-raster \
     --without-topology \
     --without-address-standardizer \
@@ -250,6 +251,7 @@ copy_formula_dylibs "$OPENSSL_PREFIX/lib"
 copy_formula_dylibs "$LIBXML2_PREFIX/lib"
 copy_formula_dylibs "$LIBXSLT_PREFIX/lib"
 copy_formula_dylibs "$JSONC_PREFIX/lib"
+copy_formula_dylibs "$PROTOBUFC_PREFIX/lib"
 
 copy_runtime_dependencies
 

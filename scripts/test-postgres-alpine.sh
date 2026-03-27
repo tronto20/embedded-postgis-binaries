@@ -63,4 +63,6 @@ $DOCKER_OPTS $IMG_NAME /bin/sh -ex -c 'echo "Starting building postgres binaries
     && if echo "$PG_VERSION" | grep -qvE '\''^(10|9)\.'\'' ; then test $(psql -qAtX -h localhost -p 65432 -U postgres -d postgres -c '\''SET jit_above_cost = 10; SELECT SUM(relpages) FROM pg_class;'\'') -gt 0 ; fi \
     \
     && if [ -n "$POSTGIS_VERSION" ]; then test $(psql -qAtX -h localhost -p 65432 -U postgres -d postgres -c "CREATE EXTENSION postgis; SELECT PostGIS_Lib_Version();") = $POSTGIS_VERSION ; fi \
-    && if [ -n "$POSTGIS_VERSION" ]; then test $(psql -qAtX -h localhost -p 65432 -U postgres -d postgres -c "SELECT ST_AsText(ST_Transform(\$\$SRID=4326;POINT(0 0)\$\$::geometry, 3857));") = "POINT(0 0)" ; fi'
+    && if [ -n "$POSTGIS_VERSION" ]; then test $(psql -qAtX -h localhost -p 65432 -U postgres -d postgres -c "SELECT ST_AsText(ST_Transform(\$\$SRID=4326;POINT(0 0)\$\$::geometry, 3857));") = "POINT(0 0)" ; fi \
+    && if [ -n "$POSTGIS_VERSION" ]; then test $(psql -qAtX -h localhost -p 65432 -U postgres -d postgres -c "SELECT octet_length(ST_AsMVT(q, '\''default'\'')) FROM (SELECT 1 AS id, ST_AsMVTGeom(ST_Transform(ST_SetSRID(ST_MakePoint(0, 0), 4326), 3857), ST_TileEnvelope(0, 0, 0)) AS geom) AS q;") -gt 0 ; fi \
+    && if [ -n "$POSTGIS_VERSION" ]; then test $(psql -qAtX -h localhost -p 65432 -U postgres -d postgres -c "SELECT octet_length(ST_AsGeobuf(q, '\''geom'\'')) FROM (SELECT ST_SetSRID(ST_MakePoint(0, 0), 4326) AS geom) AS q;") -gt 0 ; fi'
