@@ -505,6 +505,9 @@ project(':custom-windows-platform') {
     if (distNameParam == 'windows') {
         def archName = archNameParam ?: 'amd64'
         def bashExecutable = resolveWindowsBashExecutable()
+        def buildWindowsScript = archName == 'arm64v8'
+                ? "$rootDir/scripts/build-postgres-windows-arm64.sh"
+                : "$rootDir/scripts/build-postgres-windows-amd64.sh"
 
         task buildCustomWindowsBundle(group: 'build (custom)', type: Exec, dependsOn: validateInputs) {
             doFirst {
@@ -523,13 +526,19 @@ project(':custom-windows-platform') {
             inputs.property('archName', archName)
             inputs.property('postgisVersion', postgisVersionParam)
 
-            inputs.file("$rootDir/scripts/build-postgres-windows.sh")
+            inputs.file(buildWindowsScript)
             outputs.dir("$temporaryDir/bundle")
 
             workingDir temporaryDir
-            configureLazyCommandLine(delegate,
-                    bashExecutable, "$rootDir/scripts/build-postgres-windows.sh",
-                    '-v', "$pgVersionParam", '-b', "$pgBinVersionParam", '-g', postgisVersionParam, '-a', archName)
+            if (archName == 'arm64v8') {
+                configureLazyCommandLine(delegate,
+                        bashExecutable, buildWindowsScript,
+                        '-v', "$pgVersionParam", '-g', postgisVersionParam)
+            } else {
+                configureLazyCommandLine(delegate,
+                        bashExecutable, buildWindowsScript,
+                        '-v', "$pgVersionParam", '-b', "$pgBinVersionParam", '-g', postgisVersionParam)
+            }
         }
 
         task customWindowsJar(group: 'build (custom)', type: Jar) {
