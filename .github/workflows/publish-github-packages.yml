@@ -13,10 +13,10 @@ on:
         required: true
         default: "3.6.2"
       include_windows_arm64:
-        description: "Include the Windows arm64 artifact and BOM entry"
+        description: "Include the experimental Windows arm64 artifact and BOM entry"
         required: false
         type: boolean
-        default: true
+        default: false
       windows_arm64_pg_version:
         description: "Optional PostgreSQL version override for Windows arm64 when MSYS2 lags behind"
         required: false

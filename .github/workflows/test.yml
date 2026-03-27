@@ -15,10 +15,10 @@ on:
         description: "Optional PostgreSQL Windows x64 binary version override (defaults to <pg_version>-1)"
         required: false
       include_windows_arm64:
-        description: "Include the Windows arm64 check"
+        description: "Include the experimental Windows arm64 check"
         required: false
         type: boolean
-        default: true
+        default: false
       windows_arm64_pg_version:
         description: "Optional PostgreSQL version override for Windows arm64 when MSYS2 lags behind"
         required: false
@@ -48,13 +48,13 @@ jobs:
             echo "postgres_matrix=[\"$INPUT_PG_VERSION\"]" >> "$GITHUB_OUTPUT"
             echo "postgis_version=${INPUT_POSTGIS_VERSION:-3.6.2}" >> "$GITHUB_OUTPUT"
             echo "windows_pg_bin_version=${INPUT_PG_BIN_VERSION:-${INPUT_PG_VERSION}-1}" >> "$GITHUB_OUTPUT"
-            echo "include_windows_arm64=${INPUT_INCLUDE_WINDOWS_ARM64:-true}" >> "$GITHUB_OUTPUT"
+            echo "include_windows_arm64=${INPUT_INCLUDE_WINDOWS_ARM64:-false}" >> "$GITHUB_OUTPUT"
             echo "windows_arm64_pg_version=${INPUT_WINDOWS_ARM64_PG_VERSION:-$INPUT_PG_VERSION}" >> "$GITHUB_OUTPUT"
           else
             echo 'postgres_matrix=["18.3","17.9","16.13"]' >> "$GITHUB_OUTPUT"
             echo "postgis_version=3.6.2" >> "$GITHUB_OUTPUT"
             echo "windows_pg_bin_version=" >> "$GITHUB_OUTPUT"
-            echo "include_windows_arm64=true" >> "$GITHUB_OUTPUT"
+            echo "include_windows_arm64=false" >> "$GITHUB_OUTPUT"
             echo "windows_arm64_pg_version=18.2" >> "$GITHUB_OUTPUT"
           fi
 

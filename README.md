@@ -50,23 +50,23 @@ The manual `Publish GitHub Packages` workflow publishes a matching BOM plus thes
 * `embedded-postgres-binaries-linux-amd64-alpine`
 * `embedded-postgres-binaries-linux-arm64v8-alpine`
 * `embedded-postgres-binaries-windows-amd64`
-* `embedded-postgres-binaries-windows-arm64v8`
 * `embedded-postgres-binaries-darwin-arm64v8`
 
-By default the workflow publishes all seven artifacts. If you set `include_windows_arm64=false`, the Windows arm64 artifact is skipped and the published BOM omits that entry as well.
+By default the workflow publishes these six artifacts and the matching BOM. If you set `include_windows_arm64=true`, the experimental Windows arm64 artifact is published as well and the BOM includes that entry.
 
 Workflow inputs:
 
 * `pg_version` and `postgis_version` are required
 * `pg_bin_version` is optional and defaults to `<pg_version>-1` for Windows x64
-* `include_windows_arm64` is optional and defaults to `true`
-* `windows_arm64_pg_version` is optional and is only needed when the MSYS2 Windows arm64 package lags behind the other platforms
+* `include_windows_arm64` is optional and defaults to `false`
+* `windows_arm64_pg_version` is optional and is only needed when you explicitly opt in to the Windows arm64 path
 
 Supported combinations:
 
 * PostgreSQL `16.x`, `17.x`, and `18.x` support PostGIS `3.4.x`, `3.5.x`, and `3.6.x`
 * The common cross-platform feature set is PostGIS core plus coordinate transforms, `geography`, MVT, and Geobuf
 * `raster` is not included in these published artifacts
+* Windows arm64 is currently opt-in only because the upstream MSYS2 prebuilt PostGIS package does not yet provide the same protobuf-backed feature set as the other platforms
 
 Use the repository URL `https://maven.pkg.github.com/<owner>/<repo>`. Replace `<owner>/<repo>` with the repository that ran the workflow.
 
@@ -95,7 +95,6 @@ dependencies {
     implementation "io.zonky.test.postgres:embedded-postgres-binaries-linux-amd64-alpine"
     implementation "io.zonky.test.postgres:embedded-postgres-binaries-linux-arm64v8-alpine"
     implementation "io.zonky.test.postgres:embedded-postgres-binaries-windows-amd64"
-    implementation "io.zonky.test.postgres:embedded-postgres-binaries-windows-arm64v8"
     implementation "io.zonky.test.postgres:embedded-postgres-binaries-darwin-arm64v8"
 }
 ```
@@ -178,7 +177,7 @@ Support for other architectures can be enabled by adding the corresponding Maven
 
 Note that not all architectures are supported by all platforms, you can find an exhaustive list of all available artifacts here: https://mvnrepository.com/artifact/io.zonky.test.postgres
 
-The GitHub Packages workflow does not publish the full historical matrix. It publishes only the seven platform artifacts listed above.
+The GitHub Packages workflow does not publish the full historical matrix. By default it publishes only the six platform artifacts listed above. Windows arm64 is available only when you explicitly set `include_windows_arm64=true`.
 
 ## Building from Source
 The project uses a [Gradle](http://gradle.org)-based build system. In the instructions
@@ -237,6 +236,8 @@ For Windows arm64, use the dedicated Windows ARM build:
 
 `./gradlew :custom-windows-platform:testCustomWindowsJar -PpgVersion=18.2 -PpostgisVersion=3.6.2 -PdistName=windows -ParchName=arm64v8`
 
+Windows arm64 is currently experimental. It is not included in the default `Checks` or `Publish GitHub Packages` workflows and should be enabled manually only when you are validating that path specifically.
+
 Optional parameters:
 - *postgisVersion*
   - default value: `3.6.2`
@@ -269,7 +270,7 @@ Optional parameters:
 
 The milestone-driven `Release` GitHub Actions workflow now publishes versions in the `<pg_version>-<postgis_version>` format and uses the PostGIS-enabled Linux and Alpine build path. The repository also includes manual GitHub Actions workflows for `Checks`, `Publish PostGIS Darwin Artifact`, `Publish PostGIS Windows Artifact`, `Publish PostGIS Windows ARM64 Artifact`, and `Publish GitHub Packages`.
 
-The manual `Checks` workflow accepts `pg_version` and `postgis_version` so you can verify a specific PostgreSQL/PostGIS combination before publishing. It also supports optional `pg_bin_version`, `include_windows_arm64`, and `windows_arm64_pg_version` inputs for the Windows paths.
+The manual `Checks` workflow accepts `pg_version` and `postgis_version` so you can verify a specific PostgreSQL/PostGIS combination before publishing. It also supports optional `pg_bin_version`, `include_windows_arm64`, and `windows_arm64_pg_version` inputs for the Windows paths. `include_windows_arm64` now defaults to `false`.
 
 ## License
 The project is released under version 2.0 of the [Apache License](http://www.apache.org/licenses/LICENSE-2.0.html).
