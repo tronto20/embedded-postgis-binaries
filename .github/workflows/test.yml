@@ -1,15 +1,37 @@
 name: Checks
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      pg_version:
+        description: "PostgreSQL version to test (supported: 16.x, 17.x, 18.x; for example 18.3)"
+        required: true
+      postgis_version:
+        description: "PostGIS version to test (supported: 3.4.x, 3.5.x, 3.6.x; for example 3.6.2)"
+        required: false
+        default: "3.6.2"
+      pg_bin_version:
+        description: "Optional PostgreSQL Windows x64 binary version override (defaults to <pg_version>-1)"
+        required: false
+      include_windows_arm64:
+        description: "Include the Windows arm64 check"
+        required: false
+        type: boolean
+        default: true
+      windows_arm64_pg_version:
+        description: "Optional PostgreSQL version override for Windows arm64 when MSYS2 lags behind"
+        required: false
 env:
-  POSTGIS_VERSION: 3.6.2
+  DEFAULT_POSTGIS_VERSION: 3.6.2
 jobs:
   linux:
-    name: PostgreSQL ${{ matrix.postgres }} + PostGIS 3.6.2 (Linux)
+    name: PostgreSQL ${{ matrix.postgres }} + PostGIS ${{ github.event_name == 'workflow_dispatch' && inputs.postgis_version || env.DEFAULT_POSTGIS_VERSION }} (Linux)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        postgres: ["18.3", "17.9", "16.13"]
+        postgres: ${{ fromJson(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.pg_version) || '["18.3","17.9","16.13"]') }}
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
@@ -19,15 +41,16 @@ jobs:
           distribution: 'zulu'
           java-version: 17
       - name: Test PostgreSQL bundle
-        run: ./gradlew :debian-platforms:testAmd64DebianJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }} -PpostgisVersion=$POSTGIS_VERSION
+        run: ./gradlew :debian-platforms:testAmd64DebianJar -PpgVersion=${{ matrix.postgres }} -PpostgisVersion=${{ github.event_name == 'workflow_dispatch' && inputs.postgis_version || env.DEFAULT_POSTGIS_VERSION }}
         timeout-minutes: 10
+
   alpine-linux:
-    name: PostgreSQL ${{ matrix.postgres }} + PostGIS 3.6.2 (Alpine Linux)
+    name: PostgreSQL ${{ matrix.postgres }} + PostGIS ${{ github.event_name == 'workflow_dispatch' && inputs.postgis_version || env.DEFAULT_POSTGIS_VERSION }} (Alpine Linux)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        postgres: ["18.3", "17.9", "16.13"]
+        postgres: ${{ fromJson(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.pg_version) || '["18.3","17.9","16.13"]') }}
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
@@ -37,15 +60,16 @@ jobs:
           distribution: 'zulu'
           java-version: 17
       - name: Test PostgreSQL bundle
-        run: ./gradlew :alpine-platforms:testAmd64AlpineJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }} -PpostgisVersion=$POSTGIS_VERSION
+        run: ./gradlew :alpine-platforms:testAmd64AlpineJar -PpgVersion=${{ matrix.postgres }} -PpostgisVersion=${{ github.event_name == 'workflow_dispatch' && inputs.postgis_version || env.DEFAULT_POSTGIS_VERSION }}
         timeout-minutes: 10
+
   macos:
-    name: PostgreSQL ${{ matrix.postgres }} + PostGIS 3.6.2 (MacOS arm64)
+    name: PostgreSQL ${{ matrix.postgres }} + PostGIS ${{ github.event_name == 'workflow_dispatch' && inputs.postgis_version || env.DEFAULT_POSTGIS_VERSION }} (MacOS arm64)
     runs-on: macos-14
     strategy:
       fail-fast: false
       matrix:
-        postgres: ["18.3", "17.9", "16.13"]
+        postgres: ${{ fromJson(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.pg_version) || '["18.3","17.9","16.13"]') }}
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
@@ -60,15 +84,16 @@ jobs:
           brew install postgresql
           echo "$(brew --prefix postgresql)/bin" >> $GITHUB_PATH
       - name: Test PostgreSQL/PostGIS bundle
-        run: ./gradlew :custom-darwin-platform:testCustomDarwinJar -Pversion=${{ matrix.postgres }}.0-TEST -PpgVersion=${{ matrix.postgres }} -PpostgisVersion=$POSTGIS_VERSION -PdistName=darwin -ParchName=arm64v8
+        run: ./gradlew :custom-darwin-platform:testCustomDarwinJar -PpgVersion=${{ matrix.postgres }} -PpostgisVersion=${{ github.event_name == 'workflow_dispatch' && inputs.postgis_version || env.DEFAULT_POSTGIS_VERSION }} -PdistName=darwin -ParchName=arm64v8
         timeout-minutes: 45
+
   windows:
-    name: PostgreSQL ${{ matrix.postgres }} + PostGIS 3.6.2 (Windows amd64)
+    name: PostgreSQL ${{ matrix.postgres }} + PostGIS ${{ github.event_name == 'workflow_dispatch' && inputs.postgis_version || env.DEFAULT_POSTGIS_VERSION }} (Windows amd64)
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
-        postgres: ["18.3", "17.9", "16.13"]
+        postgres: ${{ fromJson(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.pg_version) || '["18.3","17.9","16.13"]') }}
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
@@ -83,11 +108,15 @@ jobs:
         run: echo $PGBIN >> $GITHUB_PATH
         shell: bash
       - name: Test PostgreSQL/PostGIS bundle
-        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=${{ matrix.postgres }}.0-TEST -PpgVersion=${{ matrix.postgres }} -PpgBinVersion=${{ matrix.postgres }}-1 -PpostgisVersion=$POSTGIS_VERSION -PdistName=windows -ParchName=amd64
         shell: bash
+        env:
+          POSTGRES_BIN_VERSION: ${{ github.event_name == 'workflow_dispatch' && (inputs.pg_bin_version != '' && inputs.pg_bin_version || format('{0}-1', inputs.pg_version)) || format('{0}-1', matrix.postgres) }}
+        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -PpgVersion=${{ matrix.postgres }} -PpgBinVersion=$POSTGRES_BIN_VERSION -PpostgisVersion=${{ github.event_name == 'workflow_dispatch' && inputs.postgis_version || env.DEFAULT_POSTGIS_VERSION }} -PdistName=windows -ParchName=amd64
         timeout-minutes: 25
+
   windows-arm64:
-    name: PostgreSQL 18.2 + PostGIS 3.6.2 (Windows ARM64)
+    name: PostgreSQL ${{ github.event_name == 'workflow_dispatch' && (inputs.windows_arm64_pg_version != '' && inputs.windows_arm64_pg_version || inputs.pg_version) || '18.2' }} + PostGIS ${{ github.event_name == 'workflow_dispatch' && inputs.postgis_version || env.DEFAULT_POSTGIS_VERSION }} (Windows ARM64)
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.include_windows_arm64 }}
     runs-on: windows-11-arm
     steps:
       - name: Checkout project
@@ -98,6 +127,9 @@ jobs:
           distribution: 'zulu'
           java-version: 17
       - name: Test PostgreSQL/PostGIS bundle
-        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=18.2.0-TEST -PpgVersion=18.2 -PpostgisVersion=$POSTGIS_VERSION -PdistName=windows -ParchName=arm64v8
         shell: bash
+        env:
+          WINDOWS_ARM64_POSTGRES_VERSION: ${{ github.event_name == 'workflow_dispatch' && (inputs.windows_arm64_pg_version != '' && inputs.windows_arm64_pg_version || inputs.pg_version) || '18.2' }}
+          POSTGIS_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.postgis_version || env.DEFAULT_POSTGIS_VERSION }}
+        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -PpgVersion=$WINDOWS_ARM64_POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION -PdistName=windows -ParchName=arm64v8
         timeout-minutes: 30

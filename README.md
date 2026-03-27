@@ -53,10 +53,13 @@ The manual `Publish GitHub Packages` workflow publishes a matching BOM plus thes
 * `embedded-postgres-binaries-windows-arm64v8`
 * `embedded-postgres-binaries-darwin-arm64v8`
 
+By default the workflow publishes all seven artifacts. If you set `include_windows_arm64=false`, the Windows arm64 artifact is skipped and the published BOM omits that entry as well.
+
 Workflow inputs:
 
 * `pg_version` and `postgis_version` are required
 * `pg_bin_version` is optional and defaults to `<pg_version>-1` for Windows x64
+* `include_windows_arm64` is optional and defaults to `true`
 * `windows_arm64_pg_version` is optional and is only needed when the MSYS2 Windows arm64 package lags behind the other platforms
 
 Supported combinations:
@@ -257,7 +260,9 @@ Optional parameters:
   - default value: executables are resolved from `/usr/bin` directory or downloaded from https://github.com/multiarch/qemu-user-static/releases/download/v2.12.0
   - supported values: a path to a directory containing qemu executables
 
-The milestone-driven `Release` GitHub Actions workflow now publishes versions in the `<pg_version>-<postgis_version>` format and uses the PostGIS-enabled Linux and Alpine build path. The repository also includes manual GitHub Actions workflows for `Publish PostGIS Darwin Artifact`, `Publish PostGIS Windows Artifact`, `Publish PostGIS Windows ARM64 Artifact`, and `Publish GitHub Packages`.
+The milestone-driven `Release` GitHub Actions workflow now publishes versions in the `<pg_version>-<postgis_version>` format and uses the PostGIS-enabled Linux and Alpine build path. The repository also includes manual GitHub Actions workflows for `Checks`, `Publish PostGIS Darwin Artifact`, `Publish PostGIS Windows Artifact`, `Publish PostGIS Windows ARM64 Artifact`, and `Publish GitHub Packages`.
+
+The manual `Checks` workflow accepts `pg_version` and `postgis_version` so you can verify a specific PostgreSQL/PostGIS combination before publishing. It also supports optional `pg_bin_version`, `include_windows_arm64`, and `windows_arm64_pg_version` inputs for the Windows paths.
 
 ## License
 The project is released under version 2.0 of the [Apache License](http://www.apache.org/licenses/LICENSE-2.0.html).

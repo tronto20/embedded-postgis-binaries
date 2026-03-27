@@ -12,6 +12,11 @@ on:
         description: "PostGIS version (supported: 3.4.x, 3.5.x, 3.6.x; for example 3.6.2)"
         required: true
         default: "3.6.2"
+      include_windows_arm64:
+        description: "Include the Windows arm64 artifact and BOM entry"
+        required: false
+        type: boolean
+        default: true
       windows_arm64_pg_version:
         description: "Optional PostgreSQL version override for Windows arm64 when MSYS2 lags behind"
         required: false
@@ -102,6 +107,7 @@ jobs:
 
   publish-windows-arm64:
     name: Publish Windows arm64 package
+    if: ${{ inputs.include_windows_arm64 }}
     runs-on: windows-11-arm
     steps:
       - name: Checkout code
@@ -183,6 +189,7 @@ jobs:
   publish-bom:
     name: Publish BOM package
     runs-on: ubuntu-latest
+    if: ${{ always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     needs:
       - publish-linux-and-alpine
       - publish-windows-x64
@@ -200,15 +207,21 @@ jobs:
         env:
           RELEASE_VERSION: ${{ inputs.pg_version }}-${{ inputs.postgis_version }}
           POSTGIS_VERSION: ${{ inputs.postgis_version }}
+          INCLUDE_WINDOWS_ARM64: ${{ inputs.include_windows_arm64 }}
           WINDOWS_ARM64_POSTGRES_VERSION: ${{ inputs.windows_arm64_pg_version }}
           DEFAULT_POSTGRES_VERSION: ${{ inputs.pg_version }}
         run: |
           echo "GITHUB_PACKAGES_URL=https://maven.pkg.github.com/${GITHUB_REPOSITORY}" >> $GITHUB_ENV
-          echo "BOM_ARTIFACT_NAMES=embedded-postgres-binaries-linux-amd64,embedded-postgres-binaries-linux-arm64v8,embedded-postgres-binaries-linux-amd64-alpine,embedded-postgres-binaries-linux-arm64v8-alpine,embedded-postgres-binaries-windows-amd64,embedded-postgres-binaries-windows-arm64v8,embedded-postgres-binaries-darwin-arm64v8" >> $GITHUB_ENV
-          RESOLVED_WINDOWS_ARM64_POSTGRES_VERSION=${WINDOWS_ARM64_POSTGRES_VERSION:-$DEFAULT_POSTGRES_VERSION}
-          if [ "$RESOLVED_WINDOWS_ARM64_POSTGRES_VERSION" != "$DEFAULT_POSTGRES_VERSION" ]; then
-            echo "BOM_ARTIFACT_VERSION_OVERRIDES=embedded-postgres-binaries-windows-arm64v8=${RESOLVED_WINDOWS_ARM64_POSTGRES_VERSION}-${POSTGIS_VERSION}" >> $GITHUB_ENV
+          BOM_ARTIFACT_NAMES=embedded-postgres-binaries-linux-amd64,embedded-postgres-binaries-linux-arm64v8,embedded-postgres-binaries-linux-amd64-alpine,embedded-postgres-binaries-linux-arm64v8-alpine,embedded-postgres-binaries-windows-amd64
+          if [ "$INCLUDE_WINDOWS_ARM64" = "true" ]; then
+            BOM_ARTIFACT_NAMES=$BOM_ARTIFACT_NAMES,embedded-postgres-binaries-windows-arm64v8
+            RESOLVED_WINDOWS_ARM64_POSTGRES_VERSION=${WINDOWS_ARM64_POSTGRES_VERSION:-$DEFAULT_POSTGRES_VERSION}
+            if [ "$RESOLVED_WINDOWS_ARM64_POSTGRES_VERSION" != "$DEFAULT_POSTGRES_VERSION" ]; then
+              echo "BOM_ARTIFACT_VERSION_OVERRIDES=embedded-postgres-binaries-windows-arm64v8=${RESOLVED_WINDOWS_ARM64_POSTGRES_VERSION}-${POSTGIS_VERSION}" >> $GITHUB_ENV
+            fi
           fi
+          BOM_ARTIFACT_NAMES=$BOM_ARTIFACT_NAMES,embedded-postgres-binaries-darwin-arm64v8
+          echo "BOM_ARTIFACT_NAMES=$BOM_ARTIFACT_NAMES" >> $GITHUB_ENV
       - name: Publish BOM to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
