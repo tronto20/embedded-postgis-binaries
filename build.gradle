@@ -7,17 +7,37 @@ plugins {
 ext {
     ossrhUsername = project.findProperty('ossrh.username')
     ossrhPassword = project.findProperty('ossrh.password')
+    publishTargetParam = project.findProperty('publishTarget') ?: 'ossrh'
+    githubPackagesUrl = project.findProperty('githubPackagesUrl')
+    githubPackagesUsername = project.findProperty('githubPackagesUsername') ?: System.getenv('GITHUB_ACTOR')
+    githubPackagesPassword = project.findProperty('githubPackagesPassword') ?: System.getenv('GITHUB_TOKEN')
+    bomArtifactNamesParam = ((project.findProperty('bomArtifactNames') ?: '') as String)
+            .split(',')
+            .collect { it.trim() }
+            .findAll { it }
+    bomArtifactVersionOverridesParam = ((project.findProperty('bomArtifactVersionOverrides') ?: '') as String)
+            .split(',')
+            .collect { it.trim() }
+            .findAll { it }
+            .collectEntries { entry ->
+                def delimiter = entry.indexOf('=')
+                if (delimiter <= 0 || delimiter == entry.length() - 1) {
+                    throw new GradleException("The 'bomArtifactVersionOverrides' property must use artifactId=version entries")
+                }
+                [(entry.substring(0, delimiter)) : entry.substring(delimiter + 1)]
+            }
 
     pgVersionParam = project.findProperty('pgVersion') ?: ("${project.version}" - '-SNAPSHOT')
     pgBinVersionParam = project.findProperty('pgBinVersion') ?: "${pgVersionParam}-1"
-    postgisVersionParam = project.findProperty('postgisVersion') ?: ''
+    pgMajorVersionParam = (pgVersionParam =~ /(\d+).+/).with { matches() ? it[0][1].toInteger() : null }
+    defaultPostgisVersionParam = project.findProperty('defaultPostgisVersion') ?: '3.6.2'
+    disablePostgisParam = (project.findProperty('disablePostgis') ?: 'false').toBoolean()
+    requestedPostgisVersionParam = project.findProperty('postgisVersion')
+    postgisVersionParam = disablePostgisParam ? '' : (requestedPostgisVersionParam ?: defaultPostgisVersionParam)
     archNameParam = project.findProperty('archName') ?: ''
     distNameParam = project.findProperty('distName') ?: ''
     dockerImageParam = project.findProperty('dockerImage') ?: ''
     qemuPathParam = project.findProperty('qemuPath') ?: ''
-
-    pgMajorVersionParam = (pgVersionParam =~ /(\d+).+/).with { matches() ? it[0][1].toInteger() : null }
-    pgMinorVersionParam = (pgVersionParam =~ /\d+\.(\d+).*/).with { matches() ? it[0][1].toInteger() : null }
 }
 
 allprojects {
@@ -54,6 +74,18 @@ task validateInputs {
 
         if (!project.version || project.version == 'unspecified') {
             throw new GradleException("The 'version' property must be set")
+        }
+        if (!pgMajorVersionParam || pgMajorVersionParam < 16) {
+            throw new GradleException("This repository currently supports PostgreSQL 16 or later")
+        }
+        if (!['ossrh', 'githubPackages'].contains(publishTargetParam)) {
+            throw new GradleException("The 'publishTarget' property must be either 'ossrh' or 'githubPackages'")
+        }
+        if (publishTargetParam == 'githubPackages' && !githubPackagesUrl) {
+            throw new GradleException("The 'githubPackagesUrl' property must be set when publishTarget=githubPackages")
+        }
+        if (bomArtifactVersionOverridesParam.keySet().any { !bomArtifactNamesParam.contains(it) }) {
+            throw new GradleException("Every entry in 'bomArtifactVersionOverrides' must also be present in 'bomArtifactNames'")
         }
         if (distNameParam && !['alpine', 'darwin', 'windows'].contains(distNameParam)) {
             throw new GradleException("Currently only the 'alpine', 'darwin', and 'windows' distributions are supported")
@@ -101,33 +133,18 @@ task prepareQemuExecutables(type: Copy, dependsOn: downloadQemuExecutables) {
 
 def repackedPlatforms = [
         ['name':'darwin', 'arch':'amd64'],
-        ['name':'windows', 'arch':'amd64']
+        ['name':'windows', 'arch':'amd64'],
+        ['name':'darwin', 'arch':'arm64v8']
 ]
-
-if (pgMajorVersionParam > 14
-        || (pgMajorVersionParam == 14 && pgMinorVersionParam >= 1)) {
-    repackedPlatforms << ['name':'darwin', 'arch':'arm64v8']
-}
-
-if (pgMajorVersionParam < 11) {
-    repackedPlatforms << ['name':'windows', 'arch':'i386']
-    if (pgVersionParam != '9.5.19') {
-        repackedPlatforms << ['name':'linux', 'arch':'i386']
-        repackedPlatforms << ['name':'linux', 'arch':'amd64']
-    }
-}
 
 def debianPlatforms = [
 //        ['arch':'arm32v6', 'image':'resin/rpi-raspbian:jessie'],
         ['arch':'arm32v7'],
         ['arch':'arm64v8'],
-        ['arch':'ppc64le']
+        ['arch':'ppc64le'],
+        ['arch':'i386'],
+        ['arch':'amd64']
 ]
-
-if (pgMajorVersionParam >= 11 || pgVersionParam == '9.5.19') {
-    debianPlatforms << ['arch':'i386']
-    debianPlatforms << ['arch':'amd64']
-}
 
 def alpinePlatforms = [
         ['arch':'i386'],
@@ -138,8 +155,7 @@ def alpinePlatforms = [
 ]
 
 def alpineVariants = [
-        ['name':'', 'opt':'', 'enabled': true],
-        ['name':'lite', 'opt':'-l', 'enabled': pgMajorVersionParam >= 10 && pgMajorVersionParam < 16]
+        ['name':'', 'opt':'', 'enabled': true]
 ]
 
 project(':repacked-platforms') {
@@ -208,7 +224,7 @@ project(':repacked-platforms') {
 }
 
 project(':debian-platforms') {
-    if (!distNameParam && !archNameParam && !dockerImageParam && !postgisVersionParam) {
+    if (!distNameParam && !archNameParam && !dockerImageParam) {
         debianPlatforms.each { platform ->
             task "build${platform.arch.capitalize()}DebianBundle"(group: "build (${platform.arch})", type: Exec, dependsOn: [validateInputs, prepareQemuExecutables]) {
                 def qemuBindings = { resolveQemuBindings() }
@@ -218,18 +234,26 @@ project(':debian-platforms') {
                     println "dockerImage:   ${dockerImage()}"
                     println "qemuBindings:  ${qemuBindings()}"
                     println ''
+
+                    if (postgisVersionParam) {
+                        println '===== Extensions ====='
+                        println "postgisVersion: $postgisVersionParam"
+                        println '======================'
+                        println ''
+                    }
                 }
 
                 inputs.property('pgVersion', pgVersionParam)
                 inputs.property('archName', platform.arch)
                 inputs.property('dockerImage', dockerImage)
+                inputs.property('postgisVersion', postgisVersionParam)
 
                 inputs.file("$rootDir/scripts/build-postgres-debian.sh")
                 outputs.dir("$temporaryDir/bundle")
 
                 workingDir temporaryDir
                 configureLazyCommandLine(delegate,
-                        'sh', "$rootDir/scripts/build-postgres-debian.sh", '-v', "$pgVersionParam", '-i', dockerImage, '-o', qemuBindings)
+                        'sh', "$rootDir/scripts/build-postgres-debian.sh", '-v', "$pgVersionParam", '-i', dockerImage, '-g', postgisVersionParam, '-o', qemuBindings)
             }
 
             task "${platform.arch}DebianJar"(group: "build (${platform.arch})", type: Jar) {
@@ -264,7 +288,7 @@ project(':debian-platforms') {
 
 alpineVariants.each { variant ->
     project(":alpine${variant.name ? '-' + variant.name : ''}-platforms") {
-        if (!distNameParam && !archNameParam && !dockerImageParam && !postgisVersionParam && variant.enabled) {
+        if (!distNameParam && !archNameParam && !dockerImageParam && variant.enabled) {
             alpinePlatforms.each { platform ->
 
                 task "build${platform.arch.capitalize()}Alpine${variant.name.capitalize()}Bundle"(group: "build (${platform.arch})", type: Exec, dependsOn: [validateInputs, prepareQemuExecutables]) {
@@ -275,18 +299,26 @@ alpineVariants.each { variant ->
                         println "dockerImage:   ${dockerImage()}"
                         println "qemuBindings:  ${qemuBindings()}"
                         println ''
+
+                        if (postgisVersionParam) {
+                            println '===== Extensions ====='
+                            println "postgisVersion: $postgisVersionParam"
+                            println '======================'
+                            println ''
+                        }
                     }
 
                     inputs.property('pgVersion', pgVersionParam)
                     inputs.property('archName', platform.arch)
                     inputs.property('dockerImage', dockerImage)
+                    inputs.property('postgisVersion', postgisVersionParam)
 
                     inputs.file("$rootDir/scripts/build-postgres-alpine.sh")
                     outputs.dir("$temporaryDir/bundle")
 
                     workingDir temporaryDir
                     configureLazyCommandLine(delegate,
-                            'sh', "$rootDir/scripts/build-postgres-alpine.sh", '-v', "$pgVersionParam", '-i', dockerImage, '-o', qemuBindings, "${variant.opt}")
+                            'sh', "$rootDir/scripts/build-postgres-alpine.sh", '-v', "$pgVersionParam", '-i', dockerImage, '-g', postgisVersionParam, '-o', qemuBindings, "${variant.opt}")
                 }
 
                 task "${platform.arch}Alpine${variant.name.capitalize()}Jar"(group: "build (${platform.arch})", type: Jar) {
@@ -321,7 +353,7 @@ alpineVariants.each { variant ->
 }
 
 project(':custom-debian-platform') {
-    if (!distNameParam && (archNameParam || dockerImageParam || postgisVersionParam)) {
+    if (!distNameParam && (archNameParam || dockerImageParam)) {
         def archName = archNameParam ?: 'amd64'
 
         task buildCustomDebianBundle(group: 'build (custom)', type: Exec, dependsOn: [validateInputs, prepareQemuExecutables]) {
@@ -621,23 +653,17 @@ publishing {
 
                         dependencyManagement {
                             dependencies {
-                                project.subprojects.collectMany { it.configurations.bundles.artifacts }
-                                    .sort { archive ->
-                                        archive.name.replaceFirst(/^embedded-postgres-binaries-([^-]+-([^-]+).*)$/, { all, suffix, arch ->
-                                            ['amd64', 'i386'].indexOf(arch).with { it != -1 ? it : 9 } + suffix
-                                        })
-                                    }
-                                    .each { archive ->
-                                        dependency {
-                                            groupId "${project.group}"
-                                            artifactId "${archive.name}"
-                                            version "${project.version}"
+                                resolveBomDependencies().each { archive ->
+                                    dependency {
+                                        groupId "${project.group}"
+                                        artifactId "${archive.artifactId}"
+                                        version "${archive.version}"
 
-                                            if (!archive.name.contains('amd64') || archive.name.contains('lite')) {
-                                                optional = 'true'
-                                            }
+                                        if (!archive.artifactId.contains('amd64') || archive.artifactId.contains('lite')) {
+                                            optional = 'true'
                                         }
                                     }
+                                }
                             }
                         }
                     }
@@ -651,28 +677,41 @@ allprojects {
 
     publishing {
         repositories {
-            maven {
-                def releasesRepoUrl = "https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/"
-                def snapshotsRepoUrl = "https://central.sonatype.com/repository/maven-snapshots/"
-                url = version.endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
-                credentials {
-                    username = ossrhUsername
-                    password = ossrhPassword
+            if (publishTargetParam == 'githubPackages') {
+                maven {
+                    name = 'githubPackages'
+                    url = uri(githubPackagesUrl)
+                    credentials {
+                        username = githubPackagesUsername
+                        password = githubPackagesPassword
+                    }
+                }
+            } else {
+                maven {
+                    def releasesRepoUrl = "https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/"
+                    def snapshotsRepoUrl = "https://central.sonatype.com/repository/maven-snapshots/"
+                    url = version.endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
+                    credentials {
+                        username = ossrhUsername
+                        password = ossrhPassword
+                    }
                 }
             }
         }
     }
 
     signing {
-        required = { gradle.taskGraph.hasTask("publish") }
+        required = { publishTargetParam == 'ossrh' && gradle.taskGraph.hasTask("publish") }
 
-        def signingKey = findProperty("signingKey")
-        def signingKeyId = findProperty("signingKeyId")
-        def signingPassword = findProperty("signingPassword")
-        useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)
+        if (publishTargetParam == 'ossrh') {
+            def signingKey = findProperty("signingKey")
+            def signingKeyId = findProperty("signingKeyId")
+            def signingPassword = findProperty("signingPassword")
+            useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)
 
-        publishing.publications.all { publication ->
-            sign publication
+            publishing.publications.all { publication ->
+                sign publication
+            }
         }
     }
 
@@ -732,6 +771,24 @@ def configurePom(pom, artifact, desc) {
                 }
             }
         }
+    }
+}
+
+def resolveBomDependencies() {
+    def dependencies = bomArtifactNamesParam ?
+            bomArtifactNamesParam.collect { artifactId ->
+                [artifactId: artifactId, version: bomArtifactVersionOverridesParam[artifactId] ?: project.version.toString()]
+            } :
+            project.subprojects.collectMany { subproject ->
+                subproject.configurations.bundles.artifacts.collect { archive ->
+                    [artifactId: archive.name, version: project.version.toString()]
+                }
+            }
+
+    return dependencies.sort { dependency ->
+        dependency.artifactId.replaceFirst(/^embedded-postgres-binaries-([^-]+-([^-]+).*)$/, { all, suffix, arch ->
+            ['amd64', 'i386'].indexOf(arch).with { it != -1 ? it : 9 } + suffix
+        })
     }
 }
 

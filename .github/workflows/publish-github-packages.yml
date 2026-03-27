@@ -1,0 +1,230 @@
+name: Publish GitHub Packages
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Artifact version for Linux, Alpine, Windows x64, and macOS arm64 (for example 18.3.0)
+        required: true
+      pg_version:
+        description: PostgreSQL version for Linux, Alpine, Windows x64, and macOS arm64 (16.x or later, for example 18.3)
+        required: true
+      pg_bin_version:
+        description: PostgreSQL Windows x64 binary version (for example 18.3-1)
+        required: true
+      postgis_version:
+        description: PostGIS version (for example 3.6.2)
+        required: true
+        default: "3.6.2"
+      windows_arm64_release_version:
+        description: Optional artifact version override for Windows arm64 when MSYS2 lags behind
+        required: false
+      windows_arm64_pg_version:
+        description: Optional PostgreSQL version override for Windows arm64 when MSYS2 lags behind
+        required: false
+permissions:
+  contents: read
+  packages: write
+jobs:
+  publish-linux-and-alpine:
+    name: Publish Linux/Alpine packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Set environment variables
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          POSTGRES_VERSION: ${{ inputs.pg_version }}
+          POSTGIS_VERSION: ${{ inputs.postgis_version }}
+        run: |
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "GITHUB_PACKAGES_URL=https://maven.pkg.github.com/${GITHUB_REPOSITORY}" >> $GITHUB_ENV
+      - name: Register QEMU
+        run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
+      - name: Validate build inputs
+        run: ./gradlew validateInputs -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION -PpublishTarget=githubPackages -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+      - name: Publish Linux/Alpine packages to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./gradlew --info \
+            :debian-platforms:publishAmd64DebianPublicationToGithubPackagesRepository \
+            :debian-platforms:publishArm64v8DebianPublicationToGithubPackagesRepository \
+            :alpine-platforms:publishAmd64AlpinePublicationToGithubPackagesRepository \
+            :alpine-platforms:publishArm64v8AlpinePublicationToGithubPackagesRepository \
+            -Pversion=$RELEASE_VERSION \
+            -PpgVersion=$POSTGRES_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION \
+            -PpublishTarget=githubPackages \
+            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+
+  publish-windows-x64:
+    name: Publish Windows x64 package
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Set environment variables
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          POSTGRES_VERSION: ${{ inputs.pg_version }}
+          POSTGRES_BIN_VERSION: ${{ inputs.pg_bin_version }}
+          POSTGIS_VERSION: ${{ inputs.postgis_version }}
+        run: |
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_BIN_VERSION=$POSTGRES_BIN_VERSION" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "GITHUB_PACKAGES_URL=https://maven.pkg.github.com/${GITHUB_REPOSITORY}" >> $GITHUB_ENV
+      - name: Test PostgreSQL/PostGIS bundle
+        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpgBinVersion=$POSTGRES_BIN_VERSION -PpostgisVersion=$POSTGIS_VERSION -PdistName=windows -ParchName=amd64
+        shell: bash
+      - name: Publish package to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./gradlew :custom-windows-platform:publishCustomWindowsPublicationToGithubPackagesRepository --info \
+            -Pversion=$RELEASE_VERSION \
+            -PpgVersion=$POSTGRES_VERSION \
+            -PpgBinVersion=$POSTGRES_BIN_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION \
+            -PdistName=windows \
+            -ParchName=amd64 \
+            -PpublishTarget=githubPackages \
+            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+        shell: bash
+
+  publish-windows-arm64:
+    name: Publish Windows arm64 package
+    runs-on: windows-11-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Resolve Windows arm64 versions
+        shell: bash
+        env:
+          DEFAULT_RELEASE_VERSION: ${{ inputs.release_version }}
+          DEFAULT_POSTGRES_VERSION: ${{ inputs.pg_version }}
+          WINDOWS_ARM64_RELEASE_VERSION: ${{ inputs.windows_arm64_release_version }}
+          WINDOWS_ARM64_POSTGRES_VERSION: ${{ inputs.windows_arm64_pg_version }}
+          POSTGIS_VERSION: ${{ inputs.postgis_version }}
+        run: |
+          echo "RELEASE_VERSION=${WINDOWS_ARM64_RELEASE_VERSION:-$DEFAULT_RELEASE_VERSION}" >> $GITHUB_ENV
+          echo "POSTGRES_VERSION=${WINDOWS_ARM64_POSTGRES_VERSION:-$DEFAULT_POSTGRES_VERSION}" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "GITHUB_PACKAGES_URL=https://maven.pkg.github.com/${GITHUB_REPOSITORY}" >> $GITHUB_ENV
+      - name: Test PostgreSQL/PostGIS bundle
+        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION -PdistName=windows -ParchName=arm64v8
+        shell: bash
+      - name: Publish package to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./gradlew :custom-windows-platform:publishCustomWindowsPublicationToGithubPackagesRepository --info \
+            -Pversion=$RELEASE_VERSION \
+            -PpgVersion=$POSTGRES_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION \
+            -PdistName=windows \
+            -ParchName=arm64v8 \
+            -PpublishTarget=githubPackages \
+            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+        shell: bash
+
+  publish-macos-arm64:
+    name: Publish macOS arm64 package
+    runs-on: macos-14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Install psql executables
+        run: |
+          brew update
+          brew install postgresql
+          echo "$(brew --prefix postgresql)/bin" >> $GITHUB_PATH
+      - name: Set environment variables
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          POSTGRES_VERSION: ${{ inputs.pg_version }}
+          POSTGIS_VERSION: ${{ inputs.postgis_version }}
+        run: |
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "GITHUB_PACKAGES_URL=https://maven.pkg.github.com/${GITHUB_REPOSITORY}" >> $GITHUB_ENV
+      - name: Test PostgreSQL/PostGIS bundle
+        run: ./gradlew :custom-darwin-platform:testCustomDarwinJar -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION -PdistName=darwin -ParchName=arm64v8
+      - name: Publish package to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./gradlew :custom-darwin-platform:publishCustomDarwinPublicationToGithubPackagesRepository --info \
+            -Pversion=$RELEASE_VERSION \
+            -PpgVersion=$POSTGRES_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION \
+            -PdistName=darwin \
+            -ParchName=arm64v8 \
+            -PpublishTarget=githubPackages \
+            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+
+  publish-bom:
+    name: Publish BOM package
+    runs-on: ubuntu-latest
+    needs:
+      - publish-linux-and-alpine
+      - publish-windows-x64
+      - publish-windows-arm64
+      - publish-macos-arm64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Resolve BOM metadata
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          POSTGIS_VERSION: ${{ inputs.postgis_version }}
+          WINDOWS_ARM64_RELEASE_VERSION: ${{ inputs.windows_arm64_release_version }}
+        run: |
+          echo "GITHUB_PACKAGES_URL=https://maven.pkg.github.com/${GITHUB_REPOSITORY}" >> $GITHUB_ENV
+          echo "BOM_ARTIFACT_NAMES=embedded-postgres-binaries-linux-amd64,embedded-postgres-binaries-linux-arm64v8,embedded-postgres-binaries-linux-amd64-alpine,embedded-postgres-binaries-linux-arm64v8-alpine,embedded-postgres-binaries-windows-amd64,embedded-postgres-binaries-windows-arm64v8,embedded-postgres-binaries-darwin-arm64v8" >> $GITHUB_ENV
+          if [ -n "$WINDOWS_ARM64_RELEASE_VERSION" ] && [ "$WINDOWS_ARM64_RELEASE_VERSION" != "$RELEASE_VERSION" ]; then
+            echo "BOM_ARTIFACT_VERSION_OVERRIDES=embedded-postgres-binaries-windows-arm64v8=${WINDOWS_ARM64_RELEASE_VERSION}-postgis-${POSTGIS_VERSION}" >> $GITHUB_ENV
+          fi
+      - name: Publish BOM to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./gradlew :publishBomPublicationToGithubPackagesRepository --info \
+            -Pversion=${{ inputs.release_version }} \
+            -PpgVersion=${{ inputs.pg_version }} \
+            -PpostgisVersion=${{ inputs.postgis_version }} \
+            -PpublishTarget=githubPackages \
+            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL \
+            -PbomArtifactNames=$BOM_ARTIFACT_NAMES \
+            ${BOM_ARTIFACT_VERSION_OVERRIDES:+-PbomArtifactVersionOverrides=$BOM_ARTIFACT_VERSION_OVERRIDES}
