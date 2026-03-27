@@ -7,5 +7,7 @@ include 'alpine-platforms'
 include 'alpine-lite-platforms'
 
 include 'custom-debian-platform'
+include 'custom-darwin-platform'
+include 'custom-windows-platform'
 include 'custom-alpine-platform'
 include 'custom-alpine-lite-platform'

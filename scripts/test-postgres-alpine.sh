@@ -54,7 +54,7 @@ $DOCKER_OPTS $IMG_NAME /bin/sh -ex -c 'echo "Starting building postgres binaries
     && chown test:test /usr/local/pg-test/data \
     \
     && su test -c '\''/usr/local/pg-test/bin/initdb -A trust -U postgres -D /usr/local/pg-test/data -E UTF-8'\'' \
-    && su test -c '\''/usr/local/pg-test/bin/pg_ctl -w -D /usr/local/pg-test/data -o "-p 65432 -F -c timezone=UTC -c synchronous_commit=off -c max_connections=300" start'\'' \
+    && if [ -n "$POSTGIS_VERSION" ]; then su test -c '\''env PROJ_LIB=/usr/local/pg-test/share/proj /usr/local/pg-test/bin/pg_ctl -w -D /usr/local/pg-test/data -o "-p 65432 -F -c timezone=UTC -c synchronous_commit=off -c max_connections=300" start'\''; else su test -c '\''/usr/local/pg-test/bin/pg_ctl -w -D /usr/local/pg-test/data -o "-p 65432 -F -c timezone=UTC -c synchronous_commit=off -c max_connections=300" start'\''; fi \
     \
     && test $(psql -qAtX -h localhost -p 65432 -U postgres -d postgres -c "SHOW SERVER_VERSION") = $PG_VERSION \
     && test $(psql -qAtX -h localhost -p 65432 -U postgres -d postgres -c "CREATE EXTENSION pgcrypto; SELECT digest('\''test'\'', '\''sha256'\'');") = "\x9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08" \
@@ -62,4 +62,5 @@ $DOCKER_OPTS $IMG_NAME /bin/sh -ex -c 'echo "Starting building postgres binaries
     \
     && if echo "$PG_VERSION" | grep -qvE '\''^(10|9)\.'\'' ; then test $(psql -qAtX -h localhost -p 65432 -U postgres -d postgres -c '\''SET jit_above_cost = 10; SELECT SUM(relpages) FROM pg_class;'\'') -gt 0 ; fi \
     \
-    && if [ -n "$POSTGIS_VERSION" ]; then test $(psql -qAtX -h localhost -p 65432 -U postgres -d postgres -c "CREATE EXTENSION postgis; SELECT PostGIS_Lib_Version();") = $POSTGIS_VERSION ; fi'
+    && if [ -n "$POSTGIS_VERSION" ]; then test $(psql -qAtX -h localhost -p 65432 -U postgres -d postgres -c "CREATE EXTENSION postgis; SELECT PostGIS_Lib_Version();") = $POSTGIS_VERSION ; fi \
+    && if [ -n "$POSTGIS_VERSION" ]; then test $(psql -qAtX -h localhost -p 65432 -U postgres -d postgres -c "SELECT ST_AsText(ST_Transform(\$\$SRID=4326;POINT(0 0)\$\$::geometry, 3857));") = "POINT(0 0)" ; fi'

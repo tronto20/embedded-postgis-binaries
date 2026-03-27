@@ -26,6 +26,27 @@ if echo "$PG_VERSION" | grep -q '^9\.' && [ "$LITE_OPT" = true ] ; then
   echo "Lite option is supported only for PostgreSQL 10 or later!" && exit 1;
 fi
 
+PROJ_VERSION=6.0.0
+PROJ_DATUMGRID_VERSION=1.8
+GEOS_VERSION=3.7.2
+GDAL_VERSION=2.4.1
+
+if [ -n "$POSTGIS_VERSION" ] ; then
+    IFS=. read -r POSTGIS_MAJOR POSTGIS_MINOR _ <<EOF
+$POSTGIS_VERSION
+EOF
+    POSTGIS_MAJOR=${POSTGIS_MAJOR:-0}
+    POSTGIS_MINOR=${POSTGIS_MINOR:-0}
+
+    if [ "$POSTGIS_MAJOR" -gt 3 ] || { [ "$POSTGIS_MAJOR" -eq 3 ] && [ "$POSTGIS_MINOR" -ge 4 ]; }; then
+        PROJ_VERSION=6.1.1
+    fi
+    if [ "$POSTGIS_MAJOR" -gt 3 ] || { [ "$POSTGIS_MAJOR" -eq 3 ] && [ "$POSTGIS_MINOR" -ge 6 ]; }; then
+        GEOS_VERSION=3.8.1
+        GDAL_VERSION=3.0.4
+    fi
+fi
+
 E2FS_ENABLED=$(echo "$PG_VERSION" | grep -qv '^9\.[0-3]\.' && echo true || echo false);
 ICU_ENABLED=$(echo "$PG_VERSION" | grep -qv '^9\.' && [ "$LITE_OPT" != true ] && echo true || echo false);
 
@@ -37,10 +58,10 @@ docker run -i --rm -v ${TRG_DIR}:/usr/local/pg-dist \
 -e POSTGIS_VERSION=$POSTGIS_VERSION \
 -e E2FS_ENABLED=$E2FS_ENABLED \
 -e ICU_ENABLED=$ICU_ENABLED \
--e PROJ_VERSION=6.0.0 \
--e PROJ_DATUMGRID_VERSION=1.8 \
--e GEOS_VERSION=3.7.2 \
--e GDAL_VERSION=2.4.1 \
+-e PROJ_VERSION=$PROJ_VERSION \
+-e PROJ_DATUMGRID_VERSION=$PROJ_DATUMGRID_VERSION \
+-e GEOS_VERSION=$GEOS_VERSION \
+-e GDAL_VERSION=$GDAL_VERSION \
 $DOCKER_OPTS $IMG_NAME /bin/sh -ex -c 'echo "Starting building postgres binaries" \
     && apk add --no-cache \
         coreutils \
@@ -156,6 +177,7 @@ $DOCKER_OPTS $IMG_NAME /bin/sh -ex -c 'echo "Starting building postgres binaries
     && find ./bin -type f \( -name "initdb" -o -name "pg_ctl" -o -name "postgres" \) -print0 | xargs -0 -n1 chrpath -r "\$ORIGIN/../lib" \
     && tar -cJvf /usr/local/pg-dist/postgres-linux-alpine_linux.txz --hard-dereference \
         share/postgresql \
+        $([ -n "$POSTGIS_VERSION" ] && echo share/proj) \
         lib \
         bin/initdb \
         bin/pg_ctl \

@@ -73,6 +73,25 @@ jobs:
       - name: Test PostgreSQL bundle
         run: ./gradlew :repacked-platforms:testAmd64DarwinJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }}
         timeout-minutes: 10
+  macos-postgis:
+    name: PostgreSQL 18.3 + PostGIS 3.6.2 (MacOS arm64)
+    runs-on: macos-14
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v3
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: 15
+      - name: Install psql executables
+        run: |
+          brew update
+          brew install postgresql
+          echo "$(brew --prefix postgresql)/bin" >> $GITHUB_PATH
+      - name: Test PostgreSQL/PostGIS bundle
+        run: ./gradlew :custom-darwin-platform:testCustomDarwinJar -Pversion=18.3.0-TEST -PpgVersion=18.3 -PpostgisVersion=3.6.2 -PdistName=darwin -ParchName=arm64v8
+        timeout-minutes: 45
   windows:
     name: PostgreSQL ${{ matrix.postgres }} (Windows)
     runs-on: windows-latest
@@ -97,3 +116,33 @@ jobs:
         run: ./gradlew :repacked-platforms:testAmd64WindowsJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }}
         shell: bash
         timeout-minutes: 10
+  windows-postgis:
+    name: PostgreSQL 18.3 + PostGIS 3.6.2 (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v3
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: 15
+      - name: Test PostgreSQL/PostGIS bundle
+        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=18.3.0-TEST -PpgVersion=18.3 -PpostgisVersion=3.6.2 -PdistName=windows -ParchName=amd64
+        shell: bash
+        timeout-minutes: 25
+  windows-postgis-arm64:
+    name: PostgreSQL 18.2 + PostGIS 3.6.2 (Windows ARM64)
+    runs-on: windows-11-arm
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v3
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: 15
+      - name: Test PostgreSQL/PostGIS bundle
+        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=18.2.0-TEST -PpgVersion=18.2 -PpostgisVersion=3.6.2 -PdistName=windows -ParchName=arm64v8
+        shell: bash
+        timeout-minutes: 30

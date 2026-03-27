@@ -1,0 +1,70 @@
+name: Publish PostGIS Windows Artifact
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Artifact version (for example 18.3.0)
+        required: true
+      pg_version:
+        description: PostgreSQL source version (for example 18.3)
+        required: true
+      pg_bin_version:
+        description: PostgreSQL binary version (for example 18.3-1)
+        required: true
+      postgis_version:
+        description: PostGIS version (for example 3.6.2)
+        required: true
+jobs:
+  publish-windows-amd64:
+    name: Publish Windows amd64
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: 15
+      - name: Test PostgreSQL/PostGIS bundle
+        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=${{ inputs.release_version }} -PpgVersion=${{ inputs.pg_version }} -PpgBinVersion=${{ inputs.pg_bin_version }} -PpostgisVersion=${{ inputs.postgis_version }} -PdistName=windows -ParchName=amd64
+        shell: bash
+      - name: Publish artifact with Gradle
+        env:
+          MAVEN_USER: ${{ secrets.MAVEN_USER }}
+          MAVEN_PASS: ${{ secrets.MAVEN_PASS }}
+          ORG_GRADLE_PROJECT_signingKeyId: ${{ secrets.SIGNING_KEY_ID }}
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_CERT }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASS }}
+        run: |
+          ./gradlew :custom-windows-platform:publish --info \
+            -Pversion=${{ inputs.release_version }} \
+            -PpgVersion=${{ inputs.pg_version }} \
+            -PpgBinVersion=${{ inputs.pg_bin_version }} \
+            -PpostgisVersion=${{ inputs.postgis_version }} \
+            -PdistName=windows \
+            -ParchName=amd64 \
+            -Possrh.username=$MAVEN_USER \
+            -Possrh.password=$MAVEN_PASS
+        shell: bash
+      - name: Upload staged artifacts to Central Sonatype
+        env:
+          SONATYPE_USERNAME: ${{ secrets.MAVEN_USER }}
+          SONATYPE_PASSWORD: ${{ secrets.MAVEN_PASS }}
+        run: |
+          SONATYPE_TOKEN=$(printf "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" | base64)
+          PUBLISH_NAMESPACE="io.zonky"
+          echo "Uploading artifacts from OSSRH-Staging to Central Sonatype..."
+          RESPONSE=$(curl -s -w "%{http_code}" -o response_body.txt -X POST \
+            -H "Authorization: Bearer $SONATYPE_TOKEN" \
+            "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/$PUBLISH_NAMESPACE?publishing_type=user_managed")
+          if [ "$RESPONSE" -ne 200 ]; then
+            echo "Failed to upload artifacts to Central Sonatype. Response code: $RESPONSE. Response body: "
+            cat response_body.txt
+            echo "Visit https://central.sonatype.com/publishing/deployments for more information."
+            exit 1
+          else
+            echo "Artifacts were uploaded successfully to Central Sonatype."
+            echo "Visit https://central.sonatype.com/publishing/deployments to view your artifacts."
+          fi
+        shell: bash

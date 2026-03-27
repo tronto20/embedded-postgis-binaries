@@ -101,24 +101,44 @@ Builds only a single binary for a specified platform and architecture.
 
 `./gradlew clean install -Pversion=18.3.0 -PpgVersion=18.3 -ParchName=arm64v8 -PdistName=alpine`
 
-It is also possible to include the PostGIS extension by passing the `postgisVersion` parameter, e.g. `-PpostgisVersion=2.5.2`. Note that this option is not (yet) available for Windows and Mac OS platforms.
+It is also possible to include the PostGIS extension by passing the `postgisVersion` parameter, e.g. `-PpostgisVersion=3.6.2`.
+
+For Apple Silicon macOS, use the dedicated Darwin build:
+
+`./gradlew :custom-darwin-platform:testCustomDarwinJar -Pversion=18.3.0 -PpgVersion=18.3 -PpostgisVersion=3.6.2 -PdistName=darwin -ParchName=arm64v8`
+
+For Windows amd64, use the dedicated Windows build:
+
+`./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=18.3.0 -PpgVersion=18.3 -PpostgisVersion=3.6.2 -PdistName=windows -ParchName=amd64`
+
+For Windows arm64, use the dedicated Windows ARM build:
+
+`./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=18.2.0 -PpgVersion=18.2 -PpostgisVersion=3.6.2 -PdistName=windows -ParchName=arm64v8`
 
 Optional parameters:
 - *postgisVersion*
   - default value: unset
-  - supported values: a postgis version number (only 2.5.2+, 2.4.7+, 2.3.9+ versions are supported)
+  - supported values: a postgis version number (only 2.5.2+, 2.4.7+, 2.3.9+ versions are supported; the build scripts automatically select newer PROJ requirements for PostGIS 3.4+ and newer GEOS/GDAL requirements for PostGIS 3.6+)
+  - note: the macOS arm64 build currently packages the core PostGIS extension only; raster support is intentionally disabled
+
+If you are targeting PostgreSQL 18, use PostGIS 3.6+.
 - *archName*
   - default value: `amd64`
   - supported values: `amd64`, `i386`, `arm32v6`, `arm32v7`, `arm64v8`, `ppc64le`
+  - note: `distName=darwin` currently supports only `arm64v8`
 - *distName*
   - default value: debian-like distribution
-  - supported values: the default value or `alpine`
+  - supported values: the default value, `alpine`, `darwin`, or `windows`
+  - note: `distName=darwin` requires `postgisVersion`
+  - note: `distName=windows` supports `amd64` and `arm64v8`; `amd64` repacks the official PostgreSQL + PostGIS Windows bundles, while `arm64v8` repacks the current MSYS2 `clangarm64` PostgreSQL/PostGIS packages and is limited to the versions published there
 - *dockerImage*
   - default value: resolved based on the platform
   - supported values: any supported docker image
 - *qemuPath*
   - default value: executables are resolved from `/usr/bin` directory or downloaded from https://github.com/multiarch/qemu-user-static/releases/download/v2.12.0
   - supported values: a path to a directory containing qemu executables
+
+The repository also includes a manual GitHub Actions workflow, `Publish PostGIS Darwin Artifact`, which builds, tests, signs and publishes the Apple Silicon macOS artifact to Maven Central.
 
 ## License
 The project is released under version 2.0 of the [Apache License](http://www.apache.org/licenses/LICENSE-2.0.html).
