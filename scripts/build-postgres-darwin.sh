@@ -134,6 +134,8 @@ cd "$SRC_DIR/postgis"
 mkdir -p config
 ln -sf ../build-aux/install-sh config/install-sh
 # Raster is intentionally disabled to keep the macOS bundle self-contained and small.
+# PostGIS still has a recursive-make race in the raster/topology-generated SQL
+# targets when built with multiple jobs, so build it serially here.
 ./configure \
     --prefix="$PREFIX" \
     --with-pgconfig="$PREFIX/bin/pg_config" \
@@ -147,7 +149,7 @@ ln -sf ../build-aux/install-sh config/install-sh
     --without-sfcgal \
     --without-tiger \
     --with-gettext=no
-make -j"$CPU_COUNT"
+make -j1
 make install
 
 find "$PREFIX/lib" -maxdepth 1 -type f \( -name "*.a" -o -name "*.la" \) -delete

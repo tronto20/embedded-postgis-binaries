@@ -1,5 +1,5 @@
 #!/bin/bash
-set -ex
+set -euxo pipefail
 
 DOCKER_OPTS=
 POSTGIS_VERSION=
@@ -128,7 +128,7 @@ $DOCKER_OPTS $IMG_NAME /bin/sh -ex -c 'echo "Starting building postgres binaries
     && make -C contrib install \
     \
     && if [ -n "$POSTGIS_VERSION" ]; then \
-      apk add --no-cache curl g++ json-c-dev linux-headers sqlite sqlite-dev sqlite-libs unzip \
+      apk add --no-cache curl g++ gettext-dev json-c-dev linux-headers sqlite sqlite-dev sqlite-libs unzip \
       && mkdir -p /usr/src/proj \
         && curl -sL "https://download.osgeo.org/proj/proj-$PROJ_VERSION.tar.gz" | tar -xzf - -C /usr/src/proj --strip-components 1 \
         && cd /usr/src/proj \
@@ -152,7 +152,8 @@ $DOCKER_OPTS $IMG_NAME /bin/sh -ex -c 'echo "Starting building postgres binaries
         && cd /usr/src/gdal \
         && curl -sL "https://gitlab.com/freedesktop-sdk/mirrors/savannah/config/-/raw/8de5d272823855dd8d81fee50418f4ebf7e79ed9/config.guess" > config.guess \
         && curl -sL "https://gitlab.com/freedesktop-sdk/mirrors/savannah/config/-/raw/b8ee5f79949d1d40e8820a774d813660e1be52d3/config.sub" > config.sub \
-        && ./configure --disable-static --prefix=/usr/local/pg-build \
+        && cp /usr/share/gettext/config.rpath ./config.rpath \
+        && ./configure --disable-static --prefix=/usr/local/pg-build --with-proj=/usr/local/pg-build \
         && make -j$(nproc) \
         && make install \
       && mkdir -p /usr/src/postgis \
@@ -160,17 +161,22 @@ $DOCKER_OPTS $IMG_NAME /bin/sh -ex -c 'echo "Starting building postgres binaries
         && cd /usr/src/postgis \
         && curl -sL "https://gitlab.com/freedesktop-sdk/mirrors/savannah/config/-/raw/8de5d272823855dd8d81fee50418f4ebf7e79ed9/config.guess" > config.guess \
         && curl -sL "https://gitlab.com/freedesktop-sdk/mirrors/savannah/config/-/raw/b8ee5f79949d1d40e8820a774d813660e1be52d3/config.sub" > config.sub \
+        && mkdir -p config \
+        && ln -sf ../build-aux/install-sh config/install-sh \
+        && ln -sf build-aux/config.rpath config.rpath \
         && ./configure \
             --prefix=/usr/local/pg-build \
             --with-pgconfig=/usr/local/pg-build/bin/pg_config \
             --with-geosconfig=/usr/local/pg-build/bin/geos-config \
             --with-projdir=/usr/local/pg-build \
             --with-gdalconfig=/usr/local/pg-build/bin/gdal-config \
+            --with-gettext=no \
         && make -j$(nproc) \
         && make install \
     ; fi \
     \
     && cd /usr/local/pg-build \
+    && mkdir -p ./lib \
     && cp /lib/libuuid.so.1 /lib/libz.so.1 /lib/libssl.so.1.1 /lib/libcrypto.so.1.1 /usr/lib/libxml2.so.2 /usr/lib/libxslt.so.1 ./lib \
     && if [ "$ICU_ENABLED" = true ]; then cp --no-dereference /usr/lib/libicudata.so* /usr/lib/libicuuc.so* /usr/lib/libicui18n.so* /usr/lib/libstdc++.so* /usr/lib/libgcc_s.so* ./lib; fi \
     && if [ -n "$POSTGIS_VERSION" ]; then cp --no-dereference /usr/lib/libjson-c.so* /usr/lib/libsqlite3.so* ./lib ; fi \

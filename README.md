@@ -196,9 +196,7 @@ Note that the complete build can take a very long time, even a few hours, depend
 
 Builds only binaries for a specified platform/submodule.
 
-`./gradlew clean :repacked-platforms:install -Pversion=18.3.0 -PpgVersion=18.3`
-
-If you need the legacy PostgreSQL-only repacked artifacts, add `-PdisablePostgis=true`.
+`./gradlew clean :debian-platforms:install -Pversion=18.3.0 -PpgVersion=18.3`
 
 ### Build only a single binary
 
@@ -206,7 +204,7 @@ Builds only a single binary for a specified platform and architecture.
 
 `./gradlew clean install -Pversion=18.3.0 -PpgVersion=18.3 -ParchName=arm64v8 -PdistName=alpine`
 
-PostgreSQL 16+ builds include PostGIS `3.6.2` by default. Use `-PdisablePostgis=true` to build a plain PostgreSQL artifact, or override the bundled PostGIS version with `-PpostgisVersion=3.6.2`.
+PostgreSQL 16+ builds in this repository always include PostGIS. Use `-PpostgisVersion=3.6.2` only when you want to override the bundled PostGIS version.
 
 For Apple Silicon macOS, use the dedicated Darwin build:
 
@@ -225,10 +223,6 @@ Optional parameters:
   - default value: `3.6.2`
   - supported values: a postgis version number (only 2.5.2+, 2.4.7+, 2.3.9+ versions are supported; the build scripts automatically select newer PROJ requirements for PostGIS 3.4+ and newer GEOS/GDAL requirements for PostGIS 3.6+)
   - note: the macOS arm64 build currently packages the core PostGIS extension only; raster support is intentionally disabled
-- *disablePostgis*
-  - default value: `false`
-  - supported values: `true`, `false`
-  - note: set this to `true` when you explicitly want the legacy PostgreSQL-only artifacts instead of the default PostGIS-enabled bundles
 
 If you are targeting PostgreSQL 18, use PostGIS 3.6+.
 - *archName*

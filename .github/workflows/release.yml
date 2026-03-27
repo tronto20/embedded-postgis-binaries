@@ -3,7 +3,7 @@ on:
   milestone:
     types: [closed]
 env:
-  DEFAULT_POSTGIS_VERSION: 3.6.2
+  POSTGIS_VERSION: 3.6.2
 jobs:
   debian-arm32v7:
     name: Debian - arm32v7
@@ -27,7 +27,7 @@ jobs:
       - name: Register QEMU
         run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
       - name: Build Bundle
-        run: ./gradlew :debian-platforms:buildArm32v7DebianBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PdefaultPostgisVersion=$DEFAULT_POSTGIS_VERSION
+        run: ./gradlew :debian-platforms:buildArm32v7DebianBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
       - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
@@ -55,7 +55,7 @@ jobs:
       - name: Register QEMU
         run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
       - name: Build Bundle
-        run: ./gradlew :debian-platforms:buildArm64v8DebianBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PdefaultPostgisVersion=$DEFAULT_POSTGIS_VERSION
+        run: ./gradlew :debian-platforms:buildArm64v8DebianBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
       - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
@@ -83,7 +83,7 @@ jobs:
       - name: Register QEMU
         run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
       - name: Build Bundle
-        run: ./gradlew :debian-platforms:buildPpc64leDebianBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PdefaultPostgisVersion=$DEFAULT_POSTGIS_VERSION
+        run: ./gradlew :debian-platforms:buildPpc64leDebianBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
       - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
@@ -111,7 +111,7 @@ jobs:
       - name: Register QEMU
         run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
       - name: Build Bundle
-        run: ./gradlew :alpine-platforms:buildArm32v6AlpineBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PdefaultPostgisVersion=$DEFAULT_POSTGIS_VERSION
+        run: ./gradlew :alpine-platforms:buildArm32v6AlpineBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
       - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
@@ -139,7 +139,7 @@ jobs:
       - name: Register QEMU
         run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
       - name: Build Bundle
-        run: ./gradlew :alpine-platforms:buildArm64v8AlpineBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PdefaultPostgisVersion=$DEFAULT_POSTGIS_VERSION
+        run: ./gradlew :alpine-platforms:buildArm64v8AlpineBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
       - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
@@ -167,7 +167,7 @@ jobs:
       - name: Register QEMU
         run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
       - name: Build Bundle
-        run: ./gradlew :alpine-platforms:buildPpc64leAlpineBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PdefaultPostgisVersion=$DEFAULT_POSTGIS_VERSION
+        run: ./gradlew :alpine-platforms:buildPpc64leAlpineBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
       - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
@@ -245,7 +245,7 @@ jobs:
             -x buildPpc64leAlpineBundle \
             -Pversion=$RELEASE_VERSION \
             -PpgVersion=$POSTGRES_VERSION \
-            -PdefaultPostgisVersion=$DEFAULT_POSTGIS_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION \
             -Possrh.username=$MAVEN_USER \
             -Possrh.password=$MAVEN_PASS
       - name: Upload staged artifacts to Central Sonatype

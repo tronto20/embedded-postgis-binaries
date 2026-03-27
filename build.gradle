@@ -30,10 +30,7 @@ ext {
     pgVersionParam = project.findProperty('pgVersion') ?: ("${project.version}" - '-SNAPSHOT')
     pgBinVersionParam = project.findProperty('pgBinVersion') ?: "${pgVersionParam}-1"
     pgMajorVersionParam = (pgVersionParam =~ /(\d+).+/).with { matches() ? it[0][1].toInteger() : null }
-    defaultPostgisVersionParam = project.findProperty('defaultPostgisVersion') ?: '3.6.2'
-    disablePostgisParam = (project.findProperty('disablePostgis') ?: 'false').toBoolean()
-    requestedPostgisVersionParam = project.findProperty('postgisVersion')
-    postgisVersionParam = disablePostgisParam ? '' : (requestedPostgisVersionParam ?: defaultPostgisVersionParam)
+    postgisVersionParam = project.findProperty('postgisVersion') ?: '3.6.2'
     archNameParam = project.findProperty('archName') ?: ''
     distNameParam = project.findProperty('distName') ?: ''
     dockerImageParam = project.findProperty('dockerImage') ?: ''
@@ -77,6 +74,12 @@ task validateInputs {
         }
         if (!pgMajorVersionParam || pgMajorVersionParam < 16) {
             throw new GradleException("This repository currently supports PostgreSQL 16 or later")
+        }
+        if (project.findProperty('defaultPostgisVersion') != null) {
+            throw new GradleException("PostGIS is always enabled; use the 'postgisVersion' property to override the bundled version")
+        }
+        if (project.findProperty('disablePostgis') != null) {
+            throw new GradleException("PostGIS is always enabled; the 'disablePostgis' property is no longer supported")
         }
         if (!['ossrh', 'githubPackages'].contains(publishTargetParam)) {
             throw new GradleException("The 'publishTarget' property must be either 'ossrh' or 'githubPackages'")
@@ -485,6 +488,7 @@ project(':custom-darwin-platform') {
 project(':custom-windows-platform') {
     if (distNameParam == 'windows') {
         def archName = archNameParam ?: 'amd64'
+        def bashExecutable = resolveWindowsBashExecutable()
 
         task buildCustomWindowsBundle(group: 'build (custom)', type: Exec, dependsOn: validateInputs) {
             doFirst {
@@ -508,7 +512,7 @@ project(':custom-windows-platform') {
 
             workingDir temporaryDir
             configureLazyCommandLine(delegate,
-                    'bash', "$rootDir/scripts/build-postgres-windows.sh",
+                    bashExecutable, "$rootDir/scripts/build-postgres-windows.sh",
                     '-v', "$pgVersionParam", '-b', "$pgBinVersionParam", '-g', postgisVersionParam, '-a', archName)
         }
 
@@ -532,7 +536,7 @@ project(':custom-windows-platform') {
 
             workingDir customWindowsJar.destinationDirectory.get().asFile
             configureLazyCommandLine(delegate,
-                    'bash', "$rootDir/scripts/test-postgres-windows.sh",
+                    bashExecutable, "$rootDir/scripts/test-postgres-windows.sh",
                     '-j', "embedded-postgres-binaries-windows-${archName}-${version}.jar",
                     '-z', "postgres-windows-${normalizeArchName(archName)}.txz",
                     '-v', "$pgVersionParam", '-g', postgisVersionParam)
@@ -897,4 +901,36 @@ def configureLazyCommandLine(Exec task, Object... arguments) {
             argument instanceof Closure ? argument() : argument
         })
     }
+}
+
+def resolveWindowsBashExecutable() {
+    if (!OperatingSystem.current().isWindows()) {
+        return 'bash'
+    }
+
+    // Windows also ships a System32 bash.exe that launches WSL, which fails on
+    // GitHub Actions runners without an installed distro. Prefer Git Bash.
+    def candidatePaths = []
+    [System.getenv('ProgramFiles'), System.getenv('ProgramFiles(x86)')].findAll { it }.each { base ->
+        candidatePaths += [
+                new File(base, 'Git/bin/bash.exe'),
+                new File(base, 'Git/usr/bin/bash.exe')
+        ]
+    }
+
+    (System.getenv('PATH') ?: '').split(File.pathSeparator).findAll { it }.each { dir ->
+        candidatePaths << new File(dir, 'bash.exe')
+    }
+
+    for (candidate in candidatePaths) {
+        def normalizedPath = candidate.absolutePath.replace('\\', '/').toLowerCase()
+        if (normalizedPath.endsWith('/windows/system32/bash.exe')) {
+            continue
+        }
+        if (candidate.exists()) {
+            return candidate.absolutePath
+        }
+    }
+
+    throw new GradleException("Unable to locate Git Bash on Windows; install Git for Windows or add bash.exe to PATH")
 }

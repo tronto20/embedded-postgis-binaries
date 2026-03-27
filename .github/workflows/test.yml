@@ -1,10 +1,10 @@
 name: Checks
 on: [push, pull_request]
 env:
-  DEFAULT_POSTGIS_VERSION: 3.6.2
+  POSTGIS_VERSION: 3.6.2
 jobs:
   linux:
-    name: PostgreSQL ${{ matrix.postgres }} (Linux, default PostGIS)
+    name: PostgreSQL ${{ matrix.postgres }} + PostGIS 3.6.2 (Linux)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -19,10 +19,10 @@ jobs:
           distribution: 'zulu'
           java-version: 17
       - name: Test PostgreSQL bundle
-        run: ./gradlew :debian-platforms:testAmd64DebianJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }} -PdefaultPostgisVersion=$DEFAULT_POSTGIS_VERSION
+        run: ./gradlew :debian-platforms:testAmd64DebianJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }} -PpostgisVersion=$POSTGIS_VERSION
         timeout-minutes: 10
   alpine-linux:
-    name: PostgreSQL ${{ matrix.postgres }} (Alpine Linux, default PostGIS)
+    name: PostgreSQL ${{ matrix.postgres }} + PostGIS 3.6.2 (Alpine Linux)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -37,34 +37,15 @@ jobs:
           distribution: 'zulu'
           java-version: 17
       - name: Test PostgreSQL bundle
-        run: ./gradlew :alpine-platforms:testAmd64AlpineJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }} -PdefaultPostgisVersion=$DEFAULT_POSTGIS_VERSION
+        run: ./gradlew :alpine-platforms:testAmd64AlpineJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }} -PpostgisVersion=$POSTGIS_VERSION
         timeout-minutes: 10
   macos:
-    name: PostgreSQL ${{ matrix.postgres }} (MacOS)
-    runs-on: macos-latest
+    name: PostgreSQL ${{ matrix.postgres }} + PostGIS 3.6.2 (MacOS arm64)
+    runs-on: macos-14
     strategy:
       fail-fast: false
       matrix:
         postgres: ["18.3", "17.9", "16.13"]
-    steps:
-      - name: Checkout project
-        uses: actions/checkout@v4
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: 17
-      - name: Install psql executables
-        run: |
-          brew update
-          brew install postgresql
-          echo "$(brew --prefix postgresql)/bin" >> $GITHUB_PATH
-      - name: Test PostgreSQL bundle
-        run: ./gradlew :repacked-platforms:testAmd64DarwinJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }} -PdisablePostgis=true
-        timeout-minutes: 10
-  macos-postgis:
-    name: PostgreSQL 18.3 + PostGIS 3.6.2 (MacOS arm64)
-    runs-on: macos-14
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
@@ -79,10 +60,10 @@ jobs:
           brew install postgresql
           echo "$(brew --prefix postgresql)/bin" >> $GITHUB_PATH
       - name: Test PostgreSQL/PostGIS bundle
-        run: ./gradlew :custom-darwin-platform:testCustomDarwinJar -Pversion=18.3.0-TEST -PpgVersion=18.3 -PdefaultPostgisVersion=$DEFAULT_POSTGIS_VERSION -PdistName=darwin -ParchName=arm64v8
+        run: ./gradlew :custom-darwin-platform:testCustomDarwinJar -Pversion=${{ matrix.postgres }}.0-TEST -PpgVersion=${{ matrix.postgres }} -PpostgisVersion=$POSTGIS_VERSION -PdistName=darwin -ParchName=arm64v8
         timeout-minutes: 45
   windows:
-    name: PostgreSQL ${{ matrix.postgres }} (Windows)
+    name: PostgreSQL ${{ matrix.postgres }} + PostGIS 3.6.2 (Windows amd64)
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -101,26 +82,11 @@ jobs:
       - name: Update system paths
         run: echo $PGBIN >> $GITHUB_PATH
         shell: bash
-      - name: Test PostgreSQL bundle
-        run: ./gradlew :repacked-platforms:testAmd64WindowsJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }} -PdisablePostgis=true
-        shell: bash
-        timeout-minutes: 10
-  windows-postgis:
-    name: PostgreSQL 18.3 + PostGIS 3.6.2 (Windows)
-    runs-on: windows-latest
-    steps:
-      - name: Checkout project
-        uses: actions/checkout@v4
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: 17
       - name: Test PostgreSQL/PostGIS bundle
-        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=18.3.0-TEST -PpgVersion=18.3 -PdefaultPostgisVersion=$DEFAULT_POSTGIS_VERSION -PdistName=windows -ParchName=amd64
+        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=${{ matrix.postgres }}.0-TEST -PpgVersion=${{ matrix.postgres }} -PpgBinVersion=${{ matrix.postgres }}-1 -PpostgisVersion=$POSTGIS_VERSION -PdistName=windows -ParchName=amd64
         shell: bash
         timeout-minutes: 25
-  windows-postgis-arm64:
+  windows-arm64:
     name: PostgreSQL 18.2 + PostGIS 3.6.2 (Windows ARM64)
     runs-on: windows-11-arm
     steps:
@@ -132,6 +98,6 @@ jobs:
           distribution: 'zulu'
           java-version: 17
       - name: Test PostgreSQL/PostGIS bundle
-        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=18.2.0-TEST -PpgVersion=18.2 -PdefaultPostgisVersion=$DEFAULT_POSTGIS_VERSION -PdistName=windows -ParchName=arm64v8
+        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=18.2.0-TEST -PpgVersion=18.2 -PpostgisVersion=$POSTGIS_VERSION -PdistName=windows -ParchName=arm64v8
         shell: bash
         timeout-minutes: 30
