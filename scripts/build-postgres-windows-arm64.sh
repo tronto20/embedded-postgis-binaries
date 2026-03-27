@@ -60,9 +60,42 @@ ensure_zstd() {
   echo "zstd is required to extract MSYS2 arm64 package metadata and archives!" && exit 1;
 }
 
+resolve_python() {
+  if command -v python3 >/dev/null 2>&1 ; then
+    printf '%s\n' python3
+    return 0
+  fi
+
+  if command -v python >/dev/null 2>&1 ; then
+    printf '%s\n' python
+    return 0
+  fi
+
+  if command -v py >/dev/null 2>&1 ; then
+    printf '%s\n' py
+    return 0
+  fi
+
+  echo "Python is required to patch the Windows arm64 PostGIS SQL files!" && exit 1;
+}
+
 extract_archive() {
   local archive_path=$1
   local target_dir=$2
+  local archive_name
+  archive_name=$(basename "$archive_path")
+
+  # MSYS2 package indexes and packages are zstd-compressed tar archives.
+  # GitHub Windows ARM runners are inconsistent about what `tar -xf` can
+  # auto-detect here, so prefer the explicit zstd pipeline first.
+  if command -v zstd >/dev/null 2>&1 && command -v tar >/dev/null 2>&1 ; then
+    case "$archive_name" in
+      *.zst|*.db)
+        zstd -dc -- "$archive_path" | tar -xf - -C "$target_dir"
+        return 0
+        ;;
+    esac
+  fi
 
   if command -v bsdtar >/dev/null 2>&1 ; then
     bsdtar -xf "$archive_path" -C "$target_dir"
@@ -86,13 +119,22 @@ extract_archive() {
 patch_arm64_postgis_sql() {
   local root_dir=$1
   local sql_file
+  local python_bin
+  local -a python_cmd
+
+  python_bin=$(resolve_python)
+  if [ "$python_bin" = "py" ] ; then
+    python_cmd=(py -3)
+  else
+    python_cmd=("$python_bin")
+  fi
 
   for sql_file in \
     "$root_dir/share/postgresql/extension/postgis--$POSTGIS_VERSION.sql" \
     "$root_dir/share/postgresql/contrib/postgis-$POSTGIS_SERIES/postgis.sql"; do
     [ -f "$sql_file" ] || continue
 
-    python3 - "$sql_file" <<'PY'
+    "${python_cmd[@]}" - "$sql_file" <<'PY'
 import re
 import sys
 from pathlib import Path
@@ -240,10 +282,12 @@ ensure_zstd
 rm -rf "$PKG_DIR"
 mkdir -p "$db_dir" "$stage_dir" "$TRG_DIR"
 
+echo "Extracting MSYS2 package database"
 extract_archive "$db_file" "$db_dir"
 PACKAGE_INDEX_FILE="$index_file"
 build_package_index "$db_dir" "$PACKAGE_INDEX_FILE"
 
+echo "Resolving PostgreSQL and PostGIS arm64 packages"
 pg_desc=$(find_desc_by_name "$db_dir" "mingw-w64-clang-aarch64-postgresql") || {
   echo "Unable to resolve the current PostgreSQL arm64 package from MSYS2!" && exit 1;
 }
@@ -304,6 +348,7 @@ for package_name in "${resolved[@]}"; do
   filename=$(desc_value "$desc_file" '%FILENAME%')
 
   download_if_missing "$DIST_DIR/$filename" "$repo_url/$filename"
+  echo "Extracting $filename"
   extract_archive "$DIST_DIR/$filename" "$stage_dir"
 done
 
@@ -312,6 +357,7 @@ if [ ! -d "$root_dir" ] ; then
   echo "MSYS2 arm64 packages were not extracted correctly!" && exit 1;
 fi
 
+echo "Patching Windows arm64 PostGIS SQL files"
 patch_arm64_postgis_sql "$root_dir"
 
 rm -f \
