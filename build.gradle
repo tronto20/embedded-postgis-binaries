@@ -524,8 +524,7 @@ project(':custom-windows-platform') {
 
         task testCustomWindowsJar(group: 'build (custom)', type: Exec, dependsOn: [validateInputs, customWindowsJar]) {
             onlyIf {
-                def system = OperatingSystem.current()
-                system.isWindows() && normalizeArchName(system.getArch()) == normalizeArchName(archName)
+                OperatingSystem.current().isWindows()
             }
 
             inputs.property('pgVersion', pgVersionParam)
