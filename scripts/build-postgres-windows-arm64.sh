@@ -83,15 +83,26 @@ extract_archive() {
   local archive_path=$1
   local target_dir=$2
   local archive_name
+  local extractor=
+  local tmp_tar=
   archive_name=$(basename "$archive_path")
 
   # MSYS2 package indexes and packages are zstd-compressed tar archives.
   # GitHub Windows ARM runners are inconsistent about what `tar -xf` can
-  # auto-detect here, so prefer the explicit zstd pipeline first.
+  # auto-detect here, so decompress to a plain tar first.
   if command -v zstd >/dev/null 2>&1 && command -v tar >/dev/null 2>&1 ; then
     case "$archive_name" in
       *.zst|*.db)
-        zstd -dc -- "$archive_path" | tar -xf - -C "$target_dir"
+        if command -v bsdtar >/dev/null 2>&1 ; then
+          extractor=bsdtar
+        else
+          extractor=tar
+        fi
+
+        tmp_tar=$(mktemp "$target_dir/.extract.XXXXXX.tar")
+        zstd -d -f -- "$archive_path" -o "$tmp_tar"
+        "$extractor" -xf "$tmp_tar" -C "$target_dir"
+        rm -f "$tmp_tar"
         return 0
         ;;
     esac
