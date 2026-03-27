@@ -27,7 +27,7 @@ def compareVersionComponents = { List<Integer> left, List<Integer> right ->
     0
 }
 
-def fetchIndexedVersions = { String cacheKey, String url, String regex ->
+def fetchIndexedVersions = { String cacheKey, String url, regex ->
     if (versionIndexCache.containsKey(cacheKey)) {
         return versionIndexCache[cacheKey]
     }
@@ -40,6 +40,24 @@ def fetchIndexedVersions = { String cacheKey, String url, String regex ->
     def versions = ((html =~ regex).collect { it[1] } as Set).toList().sort { left, right ->
         compareVersionComponents(versionComponents(right), versionComponents(left))
     }
+    versionIndexCache[cacheKey] = versions
+    versions
+}
+
+def fetchWindowsAmd64PostgisVersions = { int pgMajor ->
+    def cacheKey = "windows-amd64-postgis-${pgMajor}"
+    if (versionIndexCache.containsKey(cacheKey)) {
+        return versionIndexCache[cacheKey]
+    }
+
+    def regex = java.util.regex.Pattern.compile("postgis-bundle-pg${pgMajor}-(\\d+\\.\\d+\\.\\d+)x64\\.zip")
+    def versions = (
+            fetchIndexedVersions("${cacheKey}-current", "https://download.osgeo.org/postgis/windows/pg${pgMajor}/", regex) +
+                    fetchIndexedVersions("${cacheKey}-archive", "https://download.osgeo.org/postgis/windows/pg${pgMajor}/archive/", regex)
+    ).toSet().toList().sort { left, right ->
+        compareVersionComponents(versionComponents(right), versionComponents(left))
+    }
+
     versionIndexCache[cacheKey] = versions
     versions
 }
@@ -108,6 +126,37 @@ def resolvePostgisVersionSpec = { String requestedSpec, boolean windowsArm64 = f
     resolved
 }
 
+def resolveWindowsAmd64PostgisVersionSpec = { String requestedSpec, int pgMajor ->
+    def spec = normalizeVersionSpec(requestedSpec)
+    if (!spec) {
+        return spec
+    }
+
+    if (gradle.startParameter.offline) {
+        if (spec ==~ /^\d+\.\d+\.\d+$/) {
+            return spec
+        }
+        throw new GradleException("Cannot resolve the Windows amd64 PostGIS branch '$requestedSpec' in offline mode; specify an exact patch release instead")
+    }
+
+    def versions = fetchWindowsAmd64PostgisVersions(pgMajor)
+    if (spec ==~ /^\d+\.\d+\.\d+$/) {
+        if (!versions.contains(spec)) {
+            throw new GradleException("PostGIS ${spec} is not published for Windows amd64 PostgreSQL ${pgMajor}; available versions are ${versions.join(', ')}")
+        }
+        return spec
+    }
+    if (!(spec ==~ /^\d+\.\d+$/)) {
+        throw new GradleException("PostGIS versions must be a release branch like '3.6' or an exact patch release like '3.6.2'")
+    }
+
+    def resolved = versions.find { it.startsWith("${spec}.") }
+    if (!resolved) {
+        throw new GradleException("No Windows amd64 PostGIS bundle matching branch '$requestedSpec' is published for PostgreSQL ${pgMajor}; available versions are ${versions.join(', ')}")
+    }
+    resolved
+}
+
 ext {
     requestedVersionParam = gradle.startParameter.projectProperties['version']
     ossrhUsername = project.findProperty('ossrh.username')
@@ -134,17 +183,21 @@ ext {
 
     requestedPgVersionParam = project.findProperty('pgVersion') ?: ''
     requestedPostgisVersionParam = project.findProperty('postgisVersion') ?: '3.6.2'
-    windowsArm64TargetParam = project.findProperty('distName') == 'windows' && project.findProperty('archName') == 'arm64v8'
+    distNameParam = project.findProperty('distName') ?: ''
+    archNameParam = project.findProperty('archName') ?: ''
+    windowsTargetParam = distNameParam == 'windows'
+    windowsArm64TargetParam = windowsTargetParam && archNameParam == 'arm64v8'
+    windowsAmd64TargetParam = windowsTargetParam && archNameParam != 'arm64v8'
     pgVersionParam = resolvePostgresVersionSpec(requestedPgVersionParam as String, windowsArm64TargetParam)
     pgBinVersionParam = project.findProperty('pgBinVersion') ?: (pgVersionParam ? "${pgVersionParam}-1" : '')
     pgMajorVersionParam = (pgVersionParam =~ /(\d+).+/).with { matches() ? it[0][1].toInteger() : null }
-    postgisVersionParam = resolvePostgisVersionSpec(requestedPostgisVersionParam as String, windowsArm64TargetParam)
+    postgisVersionParam = windowsAmd64TargetParam
+            ? resolveWindowsAmd64PostgisVersionSpec(requestedPostgisVersionParam as String, pgMajorVersionParam)
+            : resolvePostgisVersionSpec(requestedPostgisVersionParam as String, windowsArm64TargetParam)
     postgisVersionMatcher = postgisVersionParam =~ /^(\d+)\.(\d+)(?:\.(\d+))?$/
     postgisMajorVersionParam = postgisVersionMatcher.matches() ? postgisVersionMatcher[0][1].toInteger() : null
     postgisMinorVersionParam = postgisVersionMatcher.matches() ? postgisVersionMatcher[0][2].toInteger() : null
     artifactVersionParam = requestedVersionParam ?: (pgVersionParam ? "${pgVersionParam}-${postgisVersionParam}" : null)
-    archNameParam = project.findProperty('archName') ?: ''
-    distNameParam = project.findProperty('distName') ?: ''
     dockerImageParam = project.findProperty('dockerImage') ?: ''
     qemuPathParam = project.findProperty('qemuPath') ?: ''
 }

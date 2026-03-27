@@ -58,7 +58,7 @@ jobs:
           }
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            RESOLVED_OUTPUT=$(./gradlew -q --console=plain printResolvedVersions -PpgVersion="$INPUT_PG_VERSION" -PpostgisVersion="${INPUT_POSTGIS_VERSION:-3.6.2}")
+            RESOLVED_OUTPUT=$(./gradlew -q --console=plain printResolvedVersions -PpgVersion="$INPUT_PG_VERSION" -PpostgisVersion="${INPUT_POSTGIS_VERSION:-3.6.2}" -PdistName=windows -ParchName=amd64)
             RESOLVED_PG_VERSION=$(extract_resolved_value "$RESOLVED_OUTPUT" resolved_pg_version)
             RESOLVED_POSTGIS_VERSION=$(extract_resolved_value "$RESOLVED_OUTPUT" resolved_postgis_version)
             INCLUDE_WINDOWS_ARM64=${INPUT_INCLUDE_WINDOWS_ARM64:-false}

@@ -30,6 +30,7 @@ For example, running the GitHub Packages workflow with `pg_version=18.3` and `po
 produces `18.3-3.6.2`.
 
 The manual workflows also accept release branches. For example, `pg_version=18` resolves to the latest published PostgreSQL 18 patch release, and `postgis_version=3.4` resolves to the latest published PostGIS 3.4 patch release before the build starts.
+When a workflow includes Windows amd64, the PostGIS branch is resolved against the Windows bundle versions actually published by OSGeo for that PostgreSQL major.
 
 When `-Pversion` is omitted during local builds, Gradle derives the same artifact version automatically from
 `pgVersion` and `postgisVersion`.
@@ -73,6 +74,7 @@ Supported combinations:
 * The common cross-platform feature set is PostGIS core plus coordinate transforms, `geography`, MVT, and Geobuf
 * `raster` is not included in these published artifacts
 * Windows arm64 is currently opt-in only because the upstream MSYS2 prebuilt PostGIS package does not yet provide the same protobuf-backed feature set as the other platforms
+* Windows amd64 support also depends on the official OSGeo Windows bundle matrix for each PostgreSQL major. For example, PostgreSQL 17 does not currently have a Windows bundle for PostGIS 3.4.x, and PostgreSQL 18 currently has only 3.6.x Windows bundles.
 
 Use the repository URL `https://maven.pkg.github.com/<owner>/<repo>`. Replace `<owner>/<repo>` with the repository that ran the workflow.
 
@@ -286,6 +288,7 @@ For the manual workflows, branch inputs are resolved automatically before Gradle
 
 * `pg_version=17` resolves to the latest published PostgreSQL 17 patch release
 * `postgis_version=3.5` resolves to the latest published PostGIS 3.5 patch release
+* workflows that include Windows amd64 resolve `postgis_version` to the latest patch release that also has an official Windows bundle for that PostgreSQL major
 * the experimental Windows arm64 workflow resolves `pg_version` against the versions currently published in MSYS2 `clangarm64`
 
 ## License

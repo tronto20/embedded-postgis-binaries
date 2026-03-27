@@ -43,7 +43,7 @@ jobs:
             printf '%s\n' "$output" | sed -n "s/^${key}=//p" | head -n1
           }
 
-          RESOLVED_OUTPUT=$(./gradlew -q --console=plain printResolvedVersions -PpgVersion="$INPUT_PG_VERSION" -PpostgisVersion="$INPUT_POSTGIS_VERSION")
+          RESOLVED_OUTPUT=$(./gradlew -q --console=plain printResolvedVersions -PpgVersion="$INPUT_PG_VERSION" -PpostgisVersion="$INPUT_POSTGIS_VERSION" -PdistName=windows -ParchName=amd64)
           RESOLVED_PG_VERSION=$(extract_resolved_value "$RESOLVED_OUTPUT" resolved_pg_version)
           RESOLVED_POSTGIS_VERSION=$(extract_resolved_value "$RESOLVED_OUTPUT" resolved_postgis_version)
           echo "postgres_version=$RESOLVED_PG_VERSION" >> "$GITHUB_OUTPUT"
