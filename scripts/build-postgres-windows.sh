@@ -77,6 +77,29 @@ ensure_zstd() {
   echo "zstd is required to extract MSYS2 arm64 package metadata and archives!" && exit 1;
 }
 
+extract_archive() {
+  local archive_path=$1
+  local target_dir=$2
+
+  if command -v bsdtar >/dev/null 2>&1 ; then
+    bsdtar -xf "$archive_path" -C "$target_dir"
+    return 0
+  fi
+
+  if command -v tar >/dev/null 2>&1 ; then
+    if tar -xf "$archive_path" -C "$target_dir" ; then
+      return 0
+    fi
+  fi
+
+  if command -v zstd >/dev/null 2>&1 && command -v tar >/dev/null 2>&1 ; then
+    zstd -dc -- "$archive_path" | tar -xf - -C "$target_dir"
+    return 0
+  fi
+
+  echo "Unable to extract $(basename "$archive_path"): neither bsdtar nor tar/zstd fallback is available." && exit 1;
+}
+
 build_amd64_bundle() {
   local edb_zip="$DIST_DIR/postgresql-$PG_BIN_VERSION-windows-x64-binaries.zip"
   local postgis_zip="$DIST_DIR/postgis-bundle-pg${PG_MAJOR}-${POSTGIS_VERSION}x64.zip"
@@ -103,7 +126,18 @@ build_amd64_bundle() {
 
   mkdir -p "$pg_dir/share/extension" "$pg_dir/share/contrib/postgis-$POSTGIS_SERIES" "$pg_dir/lib"
 
-  cp -fp "$postgis_root/bin/"*.dll "$pg_dir/bin/"
+  local postgis_dll
+  for postgis_dll in "$postgis_root"/bin/*.dll; do
+    local dll_name
+    dll_name=$(basename "$postgis_dll")
+
+    if [ -e "$pg_dir/bin/$dll_name" ] ; then
+      echo "Keeping EDB runtime DLL $dll_name"
+      continue
+    fi
+
+    cp -fp "$postgis_dll" "$pg_dir/bin/"
+  done
   cp -fp "$postgis_root/lib/postgis-3.dll" "$pg_dir/lib/"
 
   cp -fp "$postgis_root/share/extension/postgis.control" "$pg_dir/share/extension/"
@@ -245,7 +279,7 @@ build_arm64_bundle() {
   rm -rf "$PKG_DIR"
   mkdir -p "$db_dir" "$stage_dir" "$TRG_DIR"
 
-  tar -xf "$db_file" -C "$db_dir"
+  extract_archive "$db_file" "$db_dir"
   PACKAGE_INDEX_FILE="$index_file"
   build_package_index "$db_dir" "$PACKAGE_INDEX_FILE"
 
@@ -316,7 +350,7 @@ build_arm64_bundle() {
     filename=$(desc_value "$desc_file" '%FILENAME%')
 
     download_if_missing "$DIST_DIR/$filename" "$repo_url/$filename"
-    bsdtar -xf "$DIST_DIR/$filename" -C "$stage_dir"
+    extract_archive "$DIST_DIR/$filename" "$stage_dir"
   done
 
   root_dir="$stage_dir/clangarm64"
