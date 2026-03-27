@@ -44,19 +44,29 @@ mkdir -p "$DIST_DIR" "$PKG_DIR" "$TRG_DIR"
 
 download_if_missing() {
   local target=$1
-  local url=$2
+  shift
+  local urls=("$@")
+  local url
 
   if [ ! -e "$target" ] ; then
     echo "Downloading $(basename "$target")"
-    curl --fail --silent --show-error --location --globoff --retry 3 --retry-delay 2 --url "$url" --output "$target"
+    for url in "${urls[@]}"; do
+      if curl --fail --silent --show-error --location --globoff --retry 3 --retry-delay 2 --url "$url" --output "$target"; then
+        return 0
+      fi
+    done
+    echo "Unable to download $(basename "$target") from any known source" && exit 1;
   fi
 }
 
 edb_zip="$DIST_DIR/postgresql-$PG_BIN_VERSION-windows-x64-binaries.zip"
 postgis_zip="$DIST_DIR/postgis-bundle-pg${PG_MAJOR}-${POSTGIS_VERSION}x64.zip"
 
-download_if_missing "$edb_zip" "https://get.enterprisedb.com/postgresql/postgresql-$PG_BIN_VERSION-windows-x64-binaries.zip"
-download_if_missing "$postgis_zip" "https://download.osgeo.org/postgis/windows/pg${PG_MAJOR}/postgis-bundle-pg${PG_MAJOR}-${POSTGIS_VERSION}x64.zip"
+download_if_missing "$edb_zip" \
+  "https://get.enterprisedb.com/postgresql/postgresql-$PG_BIN_VERSION-windows-x64-binaries.zip"
+download_if_missing "$postgis_zip" \
+  "https://download.osgeo.org/postgis/windows/pg${PG_MAJOR}/postgis-bundle-pg${PG_MAJOR}-${POSTGIS_VERSION}x64.zip" \
+  "https://download.osgeo.org/postgis/windows/pg${PG_MAJOR}/archive/postgis-bundle-pg${PG_MAJOR}-${POSTGIS_VERSION}x64.zip"
 
 rm -rf "$PKG_DIR"
 mkdir -p "$PKG_DIR/edb" "$PKG_DIR/postgis"
