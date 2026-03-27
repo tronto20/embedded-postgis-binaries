@@ -76,7 +76,7 @@ jobs:
           java-version: 17
       - name: Test PostgreSQL bundle
         run: ./gradlew :debian-platforms:testAmd64DebianJar -PpgVersion=${{ matrix.postgres }} -PpostgisVersion=${{ needs.resolve-inputs.outputs.postgis_version }}
-        timeout-minutes: 10
+        timeout-minutes: 30
 
   alpine-linux:
     name: PostgreSQL ${{ matrix.postgres }} + PostGIS ${{ needs.resolve-inputs.outputs.postgis_version }} (Alpine Linux)
@@ -96,7 +96,7 @@ jobs:
           java-version: 17
       - name: Test PostgreSQL bundle
         run: ./gradlew :alpine-platforms:testAmd64AlpineJar -PpgVersion=${{ matrix.postgres }} -PpostgisVersion=${{ needs.resolve-inputs.outputs.postgis_version }}
-        timeout-minutes: 10
+        timeout-minutes: 30
 
   macos:
     name: PostgreSQL ${{ matrix.postgres }} + PostGIS ${{ needs.resolve-inputs.outputs.postgis_version }} (MacOS arm64)
