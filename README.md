@@ -65,6 +65,8 @@ Workflow inputs:
 Supported combinations:
 
 * PostgreSQL `16.x`, `17.x`, and `18.x` support PostGIS `3.4.x`, `3.5.x`, and `3.6.x`
+* The common cross-platform feature set is PostGIS core plus coordinate transforms, `geography`, MVT, and Geobuf
+* `raster` is not included in these published artifacts
 
 Use the repository URL `https://maven.pkg.github.com/<owner>/<repo>`. Replace `<owner>/<repo>` with the repository that ran the workflow.
 
@@ -240,7 +242,11 @@ Optional parameters:
   - default value: `3.6.2`
   - supported values: `3.4.x`, `3.5.x`, `3.6.x`
   - note: use the latest patch releases from the supported branches, for example `3.4.5`, `3.5.5`, or `3.6.2`
-  - note: the macOS arm64 build currently packages the core PostGIS extension only; raster support is intentionally disabled
+  - note: the common cross-platform feature set is PostGIS core plus coordinate transforms, `geography`, MVT, and Geobuf
+  - note: `raster` is intentionally excluded
+  - note: macOS arm64 currently excludes `topology`, `address_standardizer`, `tiger`, and `sfcgal`
+  - note: Windows arm64 currently excludes `address_standardizer`, `topology`, and `sfcgal` in addition to `raster`
+  - note: Windows amd64 packages the same intended core feature set and does not currently bundle the extra PostGIS extension families
 
 - *pgBinVersion*
   - default value: `<pgVersion>-1`
