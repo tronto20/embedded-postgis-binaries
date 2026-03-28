@@ -105,14 +105,17 @@ jobs:
       - name: Publish Linux amd64 package to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PACKAGES_USERNAME: ${{ github.actor }}
         run: |
-          ./gradlew --info \
+          ./gradlew --info --stacktrace \
             :debian-platforms:publishAmd64DebianPublicationToGithubPackagesRepository \
             -Pversion=$RELEASE_VERSION \
             -PpgVersion=$POSTGRES_VERSION \
             -PpostgisVersion=$POSTGIS_VERSION \
             -PpublishTarget=githubPackages \
-            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL \
+            -PgithubPackagesUsername=$GITHUB_PACKAGES_USERNAME \
+            -PgithubPackagesPassword=$GITHUB_TOKEN
 
   publish-linux-arm64:
     name: Publish Linux arm64 package
@@ -141,14 +144,17 @@ jobs:
       - name: Publish Linux arm64 package to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PACKAGES_USERNAME: ${{ github.actor }}
         run: |
-          ./gradlew --info \
+          ./gradlew --info --stacktrace \
             :debian-platforms:publishArm64v8DebianPublicationToGithubPackagesRepository \
             -Pversion=$RELEASE_VERSION \
             -PpgVersion=$POSTGRES_VERSION \
             -PpostgisVersion=$POSTGIS_VERSION \
             -PpublishTarget=githubPackages \
-            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL \
+            -PgithubPackagesUsername=$GITHUB_PACKAGES_USERNAME \
+            -PgithubPackagesPassword=$GITHUB_TOKEN
 
   publish-alpine-amd64:
     name: Publish Alpine amd64 package
@@ -177,14 +183,17 @@ jobs:
       - name: Publish Alpine amd64 package to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PACKAGES_USERNAME: ${{ github.actor }}
         run: |
-          ./gradlew --info \
+          ./gradlew --info --stacktrace \
             :alpine-platforms:publishAmd64AlpinePublicationToGithubPackagesRepository \
             -Pversion=$RELEASE_VERSION \
             -PpgVersion=$POSTGRES_VERSION \
             -PpostgisVersion=$POSTGIS_VERSION \
             -PpublishTarget=githubPackages \
-            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL \
+            -PgithubPackagesUsername=$GITHUB_PACKAGES_USERNAME \
+            -PgithubPackagesPassword=$GITHUB_TOKEN
 
   publish-alpine-arm64:
     name: Publish Alpine arm64 package
@@ -213,14 +222,17 @@ jobs:
       - name: Publish Alpine arm64 package to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PACKAGES_USERNAME: ${{ github.actor }}
         run: |
-          ./gradlew --info \
+          ./gradlew --info --stacktrace \
             :alpine-platforms:publishArm64v8AlpinePublicationToGithubPackagesRepository \
             -Pversion=$RELEASE_VERSION \
             -PpgVersion=$POSTGRES_VERSION \
             -PpostgisVersion=$POSTGIS_VERSION \
             -PpublishTarget=githubPackages \
-            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL \
+            -PgithubPackagesUsername=$GITHUB_PACKAGES_USERNAME \
+            -PgithubPackagesPassword=$GITHUB_TOKEN
 
   publish-windows-x64:
     name: Publish Windows x64 package
@@ -253,8 +265,9 @@ jobs:
       - name: Publish package to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PACKAGES_USERNAME: ${{ github.actor }}
         run: |
-          ./gradlew :custom-windows-platform:publishCustomWindowsPublicationToGithubPackagesRepository --info \
+          ./gradlew :custom-windows-platform:publishCustomWindowsPublicationToGithubPackagesRepository --info --stacktrace \
             -Pversion=$RELEASE_VERSION \
             -PpgVersion=$POSTGRES_VERSION \
             -PpgBinVersion=$POSTGRES_BIN_VERSION \
@@ -262,7 +275,9 @@ jobs:
             -PdistName=windows \
             -ParchName=amd64 \
             -PpublishTarget=githubPackages \
-            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL \
+            -PgithubPackagesUsername=$GITHUB_PACKAGES_USERNAME \
+            -PgithubPackagesPassword=$GITHUB_TOKEN
         shell: bash
 
   publish-windows-arm64:
@@ -294,15 +309,18 @@ jobs:
       - name: Publish package to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PACKAGES_USERNAME: ${{ github.actor }}
         run: |
-          ./gradlew :custom-windows-platform:publishCustomWindowsPublicationToGithubPackagesRepository --info \
+          ./gradlew :custom-windows-platform:publishCustomWindowsPublicationToGithubPackagesRepository --info --stacktrace \
             -Pversion=$RELEASE_VERSION \
             -PpgVersion=$POSTGRES_VERSION \
             -PpostgisVersion=$POSTGIS_VERSION \
             -PdistName=windows \
             -ParchName=arm64v8 \
             -PpublishTarget=githubPackages \
-            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL \
+            -PgithubPackagesUsername=$GITHUB_PACKAGES_USERNAME \
+            -PgithubPackagesPassword=$GITHUB_TOKEN
         shell: bash
 
   publish-macos-arm64:
@@ -337,15 +355,18 @@ jobs:
       - name: Publish package to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PACKAGES_USERNAME: ${{ github.actor }}
         run: |
-          ./gradlew :custom-darwin-platform:publishCustomDarwinPublicationToGithubPackagesRepository --info \
+          ./gradlew :custom-darwin-platform:publishCustomDarwinPublicationToGithubPackagesRepository --info --stacktrace \
             -Pversion=$RELEASE_VERSION \
             -PpgVersion=$POSTGRES_VERSION \
             -PpostgisVersion=$POSTGIS_VERSION \
             -PdistName=darwin \
             -ParchName=arm64v8 \
             -PpublishTarget=githubPackages \
-            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL \
+            -PgithubPackagesUsername=$GITHUB_PACKAGES_USERNAME \
+            -PgithubPackagesPassword=$GITHUB_TOKEN
 
   publish-bom:
     name: Publish BOM package
@@ -390,12 +411,15 @@ jobs:
       - name: Publish BOM to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PACKAGES_USERNAME: ${{ github.actor }}
         run: |
-          ./gradlew :publishBomPublicationToGithubPackagesRepository --info \
+          ./gradlew :publishBomPublicationToGithubPackagesRepository --info --stacktrace \
             -Pversion=${{ needs.resolve-inputs.outputs.release_version }} \
             -PpgVersion=${{ needs.resolve-inputs.outputs.postgres_version }} \
             -PpostgisVersion=${{ needs.resolve-inputs.outputs.postgis_version }} \
             -PpublishTarget=githubPackages \
             -PgithubPackagesUrl=$GITHUB_PACKAGES_URL \
+            -PgithubPackagesUsername=$GITHUB_PACKAGES_USERNAME \
+            -PgithubPackagesPassword=$GITHUB_TOKEN \
             -PbomArtifactNames=$BOM_ARTIFACT_NAMES \
             ${BOM_ARTIFACT_VERSION_OVERRIDES:+-PbomArtifactVersionOverrides=$BOM_ARTIFACT_VERSION_OVERRIDES}
