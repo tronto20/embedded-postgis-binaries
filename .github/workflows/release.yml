@@ -2,11 +2,13 @@ name: Release
 on:
   milestone:
     types: [closed]
+
 env:
   POSTGIS_VERSION: 3.6.2
+
 jobs:
-  debian-arm32v7:
-    name: Debian - arm32v7
+  linux-amd64:
+    name: Linux amd64
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -27,14 +29,15 @@ jobs:
       - name: Register QEMU
         run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
       - name: Build Bundle
-        run: ./gradlew :debian-platforms:buildArm32v7DebianBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
+        run: ./gradlew :debian-platforms:buildAmd64DebianBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
       - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
-          name: arm32v7DebianBundle
-          path: debian-platforms/build/tmp/buildArm32v7DebianBundle/bundle/postgres-linux-debian.txz
-  debian-arm64v8:
-    name: Debian - arm64v8
+          name: amd64DebianBundle
+          path: debian-platforms/build/tmp/buildAmd64DebianBundle/bundle/postgres-linux-debian.txz
+
+  linux-arm64:
+    name: Linux arm64
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -61,8 +64,9 @@ jobs:
         with:
           name: arm64v8DebianBundle
           path: debian-platforms/build/tmp/buildArm64v8DebianBundle/bundle/postgres-linux-debian.txz
-  debian-ppc64le:
-    name: Debian - ppc64le
+
+  alpine-amd64:
+    name: Alpine amd64
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -83,42 +87,15 @@ jobs:
       - name: Register QEMU
         run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
       - name: Build Bundle
-        run: ./gradlew :debian-platforms:buildPpc64leDebianBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
+        run: ./gradlew :alpine-platforms:buildAmd64AlpineBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
       - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
-          name: ppc64leDebianBundle
-          path: debian-platforms/build/tmp/buildPpc64leDebianBundle/bundle/postgres-linux-debian.txz
-  alpine-arm32v6:
-    name: Alpine - arm32v6
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: master
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: 17
-      - name: Set environment variables
-        env:
-          MILESTONE_VERSION: ${{ github.event.milestone.title }}
-        run: |
-          echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
-          echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
-      - name: Register QEMU
-        run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
-      - name: Build Bundle
-        run: ./gradlew :alpine-platforms:buildArm32v6AlpineBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
-      - name: Upload bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: arm32v6AlpineBundle
-          path: alpine-platforms/build/tmp/buildArm32v6AlpineBundle/bundle/postgres-linux-alpine_linux.txz
-  alpine-arm64v8:
-    name: Alpine - arm64v8
+          name: amd64AlpineBundle
+          path: alpine-platforms/build/tmp/buildAmd64AlpineBundle/bundle/postgres-linux-alpine_linux.txz
+
+  alpine-arm64:
+    name: Alpine arm64
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -145,37 +122,10 @@ jobs:
         with:
           name: arm64v8AlpineBundle
           path: alpine-platforms/build/tmp/buildArm64v8AlpineBundle/bundle/postgres-linux-alpine_linux.txz
-  alpine-ppc64le:
-    name: Alpine - ppc64le
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: master
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: 17
-      - name: Set environment variables
-        env:
-          MILESTONE_VERSION: ${{ github.event.milestone.title }}
-        run: |
-          echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
-          echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
-      - name: Register QEMU
-        run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
-      - name: Build Bundle
-        run: ./gradlew :alpine-platforms:buildPpc64leAlpineBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
-      - name: Upload bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: ppc64leAlpineBundle
-          path: alpine-platforms/build/tmp/buildPpc64leAlpineBundle/bundle/postgres-linux-alpine_linux.txz
-  publish-debian:
-    name: Publish Debian artifacts for ${{ github.event.milestone.title }}
-    needs: [debian-arm32v7, debian-arm64v8, debian-ppc64le]
+
+  publish-platforms:
+    name: Publish platform artifacts for ${{ github.event.milestone.title }}
+    needs: [linux-amd64, linux-arm64, alpine-amd64, alpine-arm64]
     if: ${{ !failure() }}
     runs-on: ubuntu-latest
     steps:
@@ -183,10 +133,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: master
-      - name: Set up Git
-        run: |
-          git config user.name "Zonky Bot"
-          git config user.email "bot@zonky.com"
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
@@ -198,22 +144,27 @@ jobs:
         run: |
           echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
           echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
-      - name: Download bundle - arm32v7Debian
+      - name: Download bundle - amd64Debian
         uses: actions/download-artifact@v4
         with:
-          name: arm32v7DebianBundle
-          path: debian-platforms/build/tmp/buildArm32v7DebianBundle/bundle
+          name: amd64DebianBundle
+          path: debian-platforms/build/tmp/buildAmd64DebianBundle/bundle
       - name: Download bundle - arm64v8Debian
         uses: actions/download-artifact@v4
         with:
           name: arm64v8DebianBundle
           path: debian-platforms/build/tmp/buildArm64v8DebianBundle/bundle
-      - name: Download bundle - ppc64leDebian
+      - name: Download bundle - amd64Alpine
         uses: actions/download-artifact@v4
         with:
-          name: ppc64leDebianBundle
-          path: debian-platforms/build/tmp/buildPpc64leDebianBundle/bundle
-      - name: Publish Debian artifacts
+          name: amd64AlpineBundle
+          path: alpine-platforms/build/tmp/buildAmd64AlpineBundle/bundle
+      - name: Download bundle - arm64v8Alpine
+        uses: actions/download-artifact@v4
+        with:
+          name: arm64v8AlpineBundle
+          path: alpine-platforms/build/tmp/buildArm64v8AlpineBundle/bundle
+      - name: Publish platform artifacts
         env:
           MAVEN_USER: ${{ secrets.MAVEN_USER }}
           MAVEN_PASS: ${{ secrets.MAVEN_PASS }}
@@ -222,23 +173,26 @@ jobs:
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASS }}
         run: |
           ./gradlew \
-            :debian-platforms:publishArm32v7DebianPublicationToMavenRepository \
+            :debian-platforms:publishAmd64DebianPublicationToMavenRepository \
             :debian-platforms:publishArm64v8DebianPublicationToMavenRepository \
-            :debian-platforms:publishPpc64leDebianPublicationToMavenRepository \
+            :alpine-platforms:publishAmd64AlpinePublicationToMavenRepository \
+            :alpine-platforms:publishArm64v8AlpinePublicationToMavenRepository \
             --info \
-            -x buildArm32v7DebianBundle \
+            -x buildAmd64DebianBundle \
             -x buildArm64v8DebianBundle \
-            -x buildPpc64leDebianBundle \
+            -x buildAmd64AlpineBundle \
+            -x buildArm64v8AlpineBundle \
             -Possrh.username=$MAVEN_USER \
             -Possrh.password=$MAVEN_PASS \
             -Pversion=$RELEASE_VERSION \
             -PpgVersion=$POSTGRES_VERSION \
             -PpostgisVersion=$POSTGIS_VERSION
-  publish-alpine:
-    name: Publish Alpine artifacts for ${{ github.event.milestone.title }}
-    needs: [alpine-arm32v6, alpine-arm64v8, alpine-ppc64le, publish-debian]
+
+  publish-windows-amd64:
+    name: Publish Windows amd64 for ${{ github.event.milestone.title }}
+    needs: [publish-platforms]
     if: ${{ !failure() }}
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -250,27 +204,26 @@ jobs:
           distribution: 'zulu'
           java-version: 17
       - name: Set environment variables
+        shell: bash
         env:
           MILESTONE_VERSION: ${{ github.event.milestone.title }}
         run: |
-          echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
-          echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
-      - name: Download bundle - arm32v6Alpine
-        uses: actions/download-artifact@v4
-        with:
-          name: arm32v6AlpineBundle
-          path: alpine-platforms/build/tmp/buildArm32v6AlpineBundle/bundle
-      - name: Download bundle - arm64v8Alpine
-        uses: actions/download-artifact@v4
-        with:
-          name: arm64v8AlpineBundle
-          path: alpine-platforms/build/tmp/buildArm64v8AlpineBundle/bundle
-      - name: Download bundle - ppc64leAlpine
-        uses: actions/download-artifact@v4
-        with:
-          name: ppc64leAlpineBundle
-          path: alpine-platforms/build/tmp/buildPpc64leAlpineBundle/bundle
-      - name: Publish Alpine artifacts
+          POSTGRES_VERSION=${MILESTONE_VERSION%.*}
+          echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_BIN_VERSION=${POSTGRES_VERSION}-1" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=${POSTGRES_VERSION}-$POSTGIS_VERSION" >> $GITHUB_ENV
+      - name: Test PostgreSQL/PostGIS bundle
+        shell: bash
+        run: |
+          ./gradlew :custom-windows-platform:testCustomWindowsJar \
+            -Pversion=$RELEASE_VERSION \
+            -PpgVersion=$POSTGRES_VERSION \
+            -PpgBinVersion=$POSTGRES_BIN_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION \
+            -PdistName=windows \
+            -ParchName=amd64
+      - name: Publish Windows artifact
+        shell: bash
         env:
           MAVEN_USER: ${{ secrets.MAVEN_USER }}
           MAVEN_PASS: ${{ secrets.MAVEN_PASS }}
@@ -278,22 +231,71 @@ jobs:
           ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_CERT }}
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASS }}
         run: |
-          ./gradlew \
-            :alpine-platforms:publishArm32v6AlpinePublicationToMavenRepository \
-            :alpine-platforms:publishArm64v8AlpinePublicationToMavenRepository \
-            :alpine-platforms:publishPpc64leAlpinePublicationToMavenRepository \
-            --info \
-            -x buildArm32v6AlpineBundle \
-            -x buildArm64v8AlpineBundle \
-            -x buildPpc64leAlpineBundle \
-            -Possrh.username=$MAVEN_USER \
-            -Possrh.password=$MAVEN_PASS \
+          ./gradlew :custom-windows-platform:publish --info \
             -Pversion=$RELEASE_VERSION \
             -PpgVersion=$POSTGRES_VERSION \
-            -PpostgisVersion=$POSTGIS_VERSION
+            -PpgBinVersion=$POSTGRES_BIN_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION \
+            -PdistName=windows \
+            -ParchName=amd64 \
+            -Possrh.username=$MAVEN_USER \
+            -Possrh.password=$MAVEN_PASS
+
+  publish-macos-arm64:
+    name: Publish macOS arm64 for ${{ github.event.milestone.title }}
+    needs: [publish-windows-amd64]
+    if: ${{ !failure() }}
+    runs-on: macos-14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: master
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Install psql executables
+        run: |
+          brew update
+          brew install postgresql
+          echo "$(brew --prefix postgresql)/bin" >> $GITHUB_PATH
+      - name: Set environment variables
+        env:
+          MILESTONE_VERSION: ${{ github.event.milestone.title }}
+        run: |
+          POSTGRES_VERSION=${MILESTONE_VERSION%.*}
+          echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=${POSTGRES_VERSION}-$POSTGIS_VERSION" >> $GITHUB_ENV
+      - name: Test PostgreSQL/PostGIS bundle
+        run: |
+          ./gradlew :custom-darwin-platform:testCustomDarwinJar \
+            -Pversion=$RELEASE_VERSION \
+            -PpgVersion=$POSTGRES_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION \
+            -PdistName=darwin \
+            -ParchName=arm64v8
+      - name: Publish macOS artifact
+        env:
+          MAVEN_USER: ${{ secrets.MAVEN_USER }}
+          MAVEN_PASS: ${{ secrets.MAVEN_PASS }}
+          ORG_GRADLE_PROJECT_signingKeyId: ${{ secrets.SIGNING_KEY_ID }}
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_CERT }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASS }}
+        run: |
+          ./gradlew :custom-darwin-platform:publish --info \
+            -Pversion=$RELEASE_VERSION \
+            -PpgVersion=$POSTGRES_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION \
+            -PdistName=darwin \
+            -ParchName=arm64v8 \
+            -Possrh.username=$MAVEN_USER \
+            -Possrh.password=$MAVEN_PASS
+
   publish-bom:
     name: Publish BOM for ${{ github.event.milestone.title }}
-    needs: [publish-alpine]
+    needs: [publish-macos-arm64]
     if: ${{ !failure() }}
     runs-on: ubuntu-latest
     steps:
@@ -320,12 +322,15 @@ jobs:
           ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_CERT }}
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASS }}
         run: |
+          BOM_ARTIFACT_NAMES=embedded-postgres-binaries-linux-amd64,embedded-postgres-binaries-linux-arm64v8,embedded-postgres-binaries-linux-amd64-alpine,embedded-postgres-binaries-linux-arm64v8-alpine,embedded-postgres-binaries-windows-amd64,embedded-postgres-binaries-darwin-arm64v8
           ./gradlew publishBomPublicationToMavenRepository --info \
+            -PbomArtifactNames=$BOM_ARTIFACT_NAMES \
             -Pversion=$RELEASE_VERSION \
             -PpgVersion=$POSTGRES_VERSION \
             -PpostgisVersion=$POSTGIS_VERSION \
             -Possrh.username=$MAVEN_USER \
             -Possrh.password=$MAVEN_PASS
+
   release:
     name: Finalize Release ${{ github.event.milestone.title }}
     needs: [publish-bom]
