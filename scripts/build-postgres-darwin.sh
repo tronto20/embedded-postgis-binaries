@@ -38,6 +38,7 @@ $POSTGIS_VERSION
 EOF
 POSTGIS_MAJOR=${POSTGIS_MAJOR:-0}
 POSTGIS_MINOR=${POSTGIS_MINOR:-0}
+POSTGIS_SERIES="$POSTGIS_MAJOR.$POSTGIS_MINOR"
 
 if [ "$POSTGIS_MAJOR" -gt 3 ] || { [ "$POSTGIS_MAJOR" -eq 3 ] && [ "$POSTGIS_MINOR" -ge 4 ]; }; then
     PROJ_VERSION=6.1.1
@@ -152,6 +153,20 @@ ln -sf ../build-aux/install-sh config/install-sh
     --with-gettext=no
 make -j1
 make install
+
+copy_postgis_sharedir_tree() {
+    local source_dir=$1
+    local target_dir=$2
+
+    [ -d "$source_dir" ] || return 0
+    mkdir -p "$target_dir"
+    cp -a "$source_dir/." "$target_dir/"
+}
+
+# Keep both sharedir layouts in the bundle so the jar works regardless of which
+# PostgreSQL build layout the runtime expects.
+copy_postgis_sharedir_tree "$PREFIX/share/extension" "$PREFIX/share/postgresql/extension"
+copy_postgis_sharedir_tree "$PREFIX/share/contrib/postgis-$POSTGIS_SERIES" "$PREFIX/share/postgresql/contrib/postgis-$POSTGIS_SERIES"
 
 find "$PREFIX/lib" -maxdepth 1 -type f \( -name "*.a" -o -name "*.la" \) -delete
 rm -rf "$PREFIX/include" "$PREFIX/lib/pkgconfig" "$PREFIX/lib/cmake" "$PREFIX/share/doc" "$PREFIX/share/info" "$PREFIX/share/man"

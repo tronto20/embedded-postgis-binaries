@@ -655,6 +655,13 @@ project(':custom-darwin-platform') {
             archiveAppendix = "darwin-${archName}"
         }
 
+        // Compatibility alias for users replacing Zonky's darwin-amd64 runtime binary on Apple Silicon.
+        task compatDarwinAmd64Jar(group: 'build (custom)', type: Jar) {
+            from buildCustomDarwinBundle
+            include "postgres-darwin-${normalizeArchName(archName)}.txz"
+            archiveAppendix = 'darwin-amd64'
+        }
+
         task testCustomDarwinJar(group: 'build (custom)', type: Exec, dependsOn: [validateInputs, customDarwinJar]) {
             onlyIf {
                 def system = OperatingSystem.current()
@@ -676,6 +683,7 @@ project(':custom-darwin-platform') {
         }
 
         artifacts.add('bundles', tasks.getByName('customDarwinJar'))
+        artifacts.add('bundles', tasks.getByName('compatDarwinAmd64Jar'))
     }
 }
 
@@ -973,6 +981,10 @@ def resolveBomDependencies() {
                     [artifactId: archive.name, version: project.version.toString()]
                 }
             }
+
+    dependencies = dependencies.findAll { dependency ->
+        dependency.artifactId != 'embedded-postgres-binaries-darwin-amd64'
+    }
 
     return dependencies.sort { dependency ->
         dependency.artifactId.replaceFirst(/^embedded-postgres-binaries-([^-]+-([^-]+).*)$/, { all, suffix, arch ->

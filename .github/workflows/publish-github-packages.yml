@@ -357,7 +357,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_PACKAGES_USERNAME: ${{ github.actor }}
         run: |
-          ./gradlew :custom-darwin-platform:publishCustomDarwinPublicationToGithubPackagesRepository --info --stacktrace \
+          ./gradlew :custom-darwin-platform:publish --info --stacktrace \
             -Pversion=$RELEASE_VERSION \
             -PpgVersion=$POSTGRES_VERSION \
             -PpostgisVersion=$POSTGIS_VERSION \

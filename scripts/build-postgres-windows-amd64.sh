@@ -84,7 +84,28 @@ if [ -z "${postgis_root:-}" ] || [ ! -d "$postgis_root" ] ; then
   echo "PostGIS Windows bundle was not extracted correctly!" && exit 1;
 fi
 
-mkdir -p "$pg_dir/share/extension" "$pg_dir/share/contrib/postgis-$POSTGIS_SERIES" "$pg_dir/lib"
+install_postgis_extension_tree() {
+  local target_dir=$1
+
+  mkdir -p "$target_dir"
+  cp -fp "$postgis_root/share/extension/postgis.control" "$target_dir/"
+  find "$postgis_root/share/extension" -maxdepth 1 -type f -name 'postgis--*.sql' -exec cp -fp {} "$target_dir/" \;
+
+  for file in postgis_upgrade.sql postgis_upgrade_for_extension.sql.in; do
+    if [ -f "$postgis_root/share/extension/$file" ]; then
+      cp -fp "$postgis_root/share/extension/$file" "$target_dir/"
+    fi
+  done
+}
+
+install_postgis_contrib_tree() {
+  local target_dir=$1
+
+  mkdir -p "$target_dir"
+  cp -a "$postgis_root/share/contrib/postgis-$POSTGIS_SERIES/." "$target_dir/"
+}
+
+mkdir -p "$pg_dir/lib"
 
 for postgis_dll in "$postgis_root"/bin/*.dll; do
   dll_name=$(basename "$postgis_dll")
@@ -98,16 +119,14 @@ for postgis_dll in "$postgis_root"/bin/*.dll; do
 done
 
 cp -fp "$postgis_root/lib/postgis-3.dll" "$pg_dir/lib/"
-cp -fp "$postgis_root/share/extension/postgis.control" "$pg_dir/share/extension/"
-find "$postgis_root/share/extension" -maxdepth 1 -type f -name 'postgis--*.sql' -exec cp -fp {} "$pg_dir/share/extension/" \;
 
-for file in postgis_upgrade.sql postgis_upgrade_for_extension.sql.in; do
-  if [ -f "$postgis_root/share/extension/$file" ]; then
-    cp -fp "$postgis_root/share/extension/$file" "$pg_dir/share/extension/"
-  fi
-done
-
-cp -a "$postgis_root/share/contrib/postgis-$POSTGIS_SERIES/." "$pg_dir/share/contrib/postgis-$POSTGIS_SERIES/"
+# PostgreSQL 18 on Windows looks for extension metadata under share/postgresql/extension.
+# Keep the older share/extension layout too so the bundle remains compatible with older
+# tools and packaging assumptions, but install the same files in both locations.
+install_postgis_extension_tree "$pg_dir/share/extension"
+install_postgis_extension_tree "$pg_dir/share/postgresql/extension"
+install_postgis_contrib_tree "$pg_dir/share/contrib/postgis-$POSTGIS_SERIES"
+install_postgis_contrib_tree "$pg_dir/share/postgresql/contrib/postgis-$POSTGIS_SERIES"
 
 cd "$pg_dir"
 tar -cJvf "$TRG_DIR/postgres-windows-x86_64.txz" \

@@ -7,6 +7,7 @@ version = '1.0.0-SNAPSHOT'
 
 def embeddedPostgresVersion = providers.gradleProperty('embeddedPostgresVersion').orElse('2.2.2').get()
 def postgresBinariesVersion = providers.gradleProperty('postgresBinariesVersion').orElse('18.3-3.6.2').get()
+def postgresBinariesArtifact = providers.gradleProperty('postgresBinariesArtifact').orElse('embedded-postgres-binaries-darwin-arm64v8').get()
 
 java {
     sourceCompatibility = JavaVersion.VERSION_11
@@ -20,7 +21,7 @@ repositories {
 
 dependencies {
     implementation "io.zonky.test:embedded-postgres:${embeddedPostgresVersion}"
-    implementation "io.zonky.test.postgres:embedded-postgres-binaries-darwin-arm64v8:${postgresBinariesVersion}"
+    implementation "io.zonky.test.postgres:${postgresBinariesArtifact}:${postgresBinariesVersion}"
 }
 
 tasks.register('smokeTest', JavaExec) {

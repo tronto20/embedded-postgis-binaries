@@ -41,6 +41,10 @@ The `embedded-postgres-binaries-bom` artifact manages versions only. Importing t
 You still need to declare one or more concrete platform artifacts such as `embedded-postgres-binaries-linux-amd64`
 or `embedded-postgres-binaries-darwin-arm64v8`.
 
+On Apple Silicon macOS, if your project keeps only Zonky's default transitive `embedded-postgres-binaries-darwin-amd64`
+and does not also add one of this repository's PostGIS-enabled macOS artifacts, `embedded-postgres` can fall back to
+the legacy x86_64 bundle and `CREATE EXTENSION postgis` will fail with `extension "postgis" is not available`.
+
 ### Maven Central
 
 Maven Central is still the source for the official release line. A list of published BOM versions is here:
@@ -62,6 +66,15 @@ The manual `Publish GitHub Packages` workflow publishes a matching BOM plus thes
 * `embedded-postgres-binaries-darwin-arm64v8`
 
 By default the workflow publishes these six artifacts and the matching BOM. If you set `include_windows_arm64=true`, the experimental Windows arm64 artifact is published as well and the BOM includes that entry.
+
+For Apple Silicon macOS, the workflow also publishes a compatibility alias:
+
+* `embedded-postgres-binaries-darwin-amd64`
+
+That alias keeps the legacy Zonky artifact name, but it contains the Apple Silicon PostGIS bundle from
+`embedded-postgres-binaries-darwin-arm64v8`. It exists only to make drop-in replacement easier on Apple Silicon.
+It is not intended for Intel macOS.
+It is also not included in the default BOM, because it is a compatibility alias rather than a primary platform artifact.
 
 The default `Checks`, milestone-driven `Release`, and `Publish GitHub Packages` workflows use the same default platform set:
 
@@ -137,6 +150,18 @@ dependencies {
 }
 ```
 
+For a more drop-in override in an existing Zonky-based setup on Apple Silicon macOS, add the compatibility alias:
+
+```gradle
+dependencies {
+    implementation "io.zonky.test:embedded-postgres:2.2.2"
+    runtimeOnly "io.zonky.test.postgres:embedded-postgres-binaries-darwin-amd64:18.3-3.6.2"
+}
+```
+
+That artifact keeps the legacy `darwin-amd64` module name, but it ships `postgres-darwin-arm_64.txz`, so
+`embedded-postgres` finds the native Apple Silicon PostGIS bundle on the runtime classpath.
+
 ### Maven example
 
 Configure credentials in `~/.m2/settings.xml`:
@@ -188,6 +213,17 @@ Then declare the GitHub Packages repository, import the BOM, and add the platfor
 ```
 
 If you consume these packages from another GitHub Actions workflow, pass a token with `read:packages` and use the same repository URL.
+
+For Apple Silicon macOS with an existing Zonky setup, you can also add the compatibility alias directly:
+
+```xml
+<dependency>
+    <groupId>io.zonky.test.postgres</groupId>
+    <artifactId>embedded-postgres-binaries-darwin-amd64</artifactId>
+    <version>18.3-3.6.2</version>
+    <scope>runtime</scope>
+</dependency>
+```
 
 ## Supported architectures
 
