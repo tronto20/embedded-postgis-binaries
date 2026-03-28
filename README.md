@@ -48,7 +48,11 @@ https://mvnrepository.com/artifact/io.zonky.test.postgres/embedded-postgres-bina
 
 ### GitHub Packages
 
-The manual `Publish GitHub Packages` workflow publishes a matching BOM plus these platform artifacts to the current repository's GitHub Packages registry:
+This repository publishes GitHub Packages to:
+
+`https://maven.pkg.github.com/tronto20/embedded-postgis-binaries`
+
+The manual `Publish GitHub Packages` workflow publishes a matching BOM plus these platform artifacts to that registry:
 
 * `embedded-postgres-binaries-linux-amd64`
 * `embedded-postgres-binaries-linux-arm64v8`
@@ -87,10 +91,15 @@ Supported combinations:
 * Windows arm64 is currently opt-in only because the upstream MSYS2 prebuilt PostGIS package does not yet provide the same protobuf-backed feature set as the other platforms
 * Windows amd64 support also depends on the official OSGeo Windows bundle matrix for each PostgreSQL major. For example, PostgreSQL 17 does not currently have a Windows bundle for PostGIS 3.4.x, and PostgreSQL 18 currently has only 3.6.x Windows bundles.
 
-Use the repository URL `https://maven.pkg.github.com/<owner>/<repo>`. Replace `<owner>/<repo>` with the repository that ran the workflow.
+These packages are intended to be published as public GitHub Packages. However, GitHub's Maven and Gradle registries still require authentication to install packages, even when the package visibility is public.
 
-Inside GitHub Actions for the same repository, `GITHUB_TOKEN` is enough.
-For local development or for another repository, use a token that can read packages, for example a PAT with `read:packages`.
+Inside GitHub Actions for this same repository, `GITHUB_TOKEN` is enough for publishing.
+For local development or for another repository, use a personal access token (classic) with `read:packages`.
+
+Recommended environment variables for consumers:
+
+* `GITHUB_USERNAME=<your GitHub username>`
+* `GITHUB_TOKEN=<PAT classic with read:packages>`
 
 ### Gradle example
 
@@ -98,9 +107,9 @@ For local development or for another repository, use a token that can read packa
 repositories {
     mavenCentral()
     maven {
-        url = uri("https://maven.pkg.github.com/<owner>/<repo>")
+        url = uri("https://maven.pkg.github.com/tronto20/embedded-postgis-binaries")
         credentials {
-            username = findProperty("gpr.user") ?: System.getenv("GITHUB_ACTOR")
+            username = findProperty("gpr.user") ?: System.getenv("GITHUB_USERNAME") ?: System.getenv("GITHUB_ACTOR")
             password = findProperty("gpr.key") ?: System.getenv("GITHUB_TOKEN")
         }
     }
@@ -137,7 +146,7 @@ Configure credentials in `~/.m2/settings.xml`:
     <servers>
         <server>
             <id>github</id>
-            <username>${env.GITHUB_ACTOR}</username>
+            <username>${env.GITHUB_USERNAME}</username>
             <password>${env.GITHUB_TOKEN}</password>
         </server>
     </servers>
@@ -150,7 +159,7 @@ Then declare the GitHub Packages repository, import the BOM, and add the platfor
 <repositories>
     <repository>
         <id>github</id>
-        <url>https://maven.pkg.github.com/&lt;owner&gt;/&lt;repo&gt;</url>
+        <url>https://maven.pkg.github.com/tronto20/embedded-postgis-binaries</url>
     </repository>
 </repositories>
 
@@ -177,6 +186,8 @@ Then declare the GitHub Packages repository, import the BOM, and add the platfor
     </dependency>
 </dependencies>
 ```
+
+If you consume these packages from another GitHub Actions workflow, pass a token with `read:packages` and use the same repository URL.
 
 ## Supported architectures
 
