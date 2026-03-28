@@ -2,6 +2,7 @@ import org.gradle.internal.os.OperatingSystem
 
 plugins {
     id "de.undercouch.download" version "4.1.1"
+    id 'java-platform'
 }
 
 def versionIndexCache = [:]
@@ -205,12 +206,19 @@ ext {
 version = artifactVersionParam ?: version
 
 allprojects {
-    apply plugin: 'java'
     apply plugin: 'maven-publish'
     apply plugin: 'signing'
 
     group = 'io.zonky.test.postgres'
     version = rootProject.version
+
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
 
     base {
         archivesName = 'embedded-postgres-binaries'
@@ -219,10 +227,6 @@ allprojects {
     java {
         sourceCompatibility = JavaVersion.VERSION_1_6
         targetCompatibility = JavaVersion.VERSION_1_6
-    }
-
-    repositories {
-        mavenCentral()
     }
 
     configurations {
@@ -830,7 +834,7 @@ subprojects {
                 def publicationName = archive.archiveTask.name - 'Jar'
                 "$publicationName"(MavenPublication) {
                     artifactId = "${archive.name}"
-                    configurePom(pom, artifactId, 'A lightweight bundle of PostgreSQL database with reduced size')
+                    configurePom(delegate, artifactId, 'A lightweight bundle of PostgreSQL database with reduced size')
 
                     artifact archive
                     artifact sourcesJar
@@ -841,35 +845,21 @@ subprojects {
     }
 }
 
-publishing {
-    publications {
-        if (!distNameParam && !archNameParam && !dockerImageParam) {
+if (!distNameParam && !archNameParam && !dockerImageParam) {
+    dependencies {
+        constraints {
+            resolveBomDependencies().each { archive ->
+                api("${project.group}:${archive.artifactId}:${archive.version}")
+            }
+        }
+    }
+
+    publishing {
+        publications {
             bom(MavenPublication) {
                 artifactId = 'embedded-postgres-binaries-bom'
-                configurePom(pom, artifactId, 'Bill of Materials')
-
-                pom.withXml {
-                    def root = asNode()
-                    root.children().last() + {
-                        resolveStrategy = Closure.DELEGATE_FIRST
-
-                        dependencyManagement {
-                            dependencies {
-                                resolveBomDependencies().each { archive ->
-                                    dependency {
-                                        groupId "${project.group}"
-                                        artifactId "${archive.artifactId}"
-                                        version "${archive.version}"
-
-                                        if (!archive.artifactId.contains('amd64') || archive.artifactId.contains('lite')) {
-                                            optional = 'true'
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                from components.javaPlatform
+                configurePom(delegate, artifactId, 'Bill of Materials')
             }
         }
     }
@@ -919,12 +909,15 @@ allprojects {
 
     task install(group: 'publishing') {}
 
-    configurations.bundles.artifacts.all { archive ->
-        def publicationName = archive.archiveTask.name - 'Jar'
+    def bundlesConfiguration = configurations.findByName('bundles')
+    if (bundlesConfiguration) {
+        bundlesConfiguration.artifacts.all { archive ->
+            def publicationName = archive.archiveTask.name - 'Jar'
 
-        jar.dependsOn "${archive.archiveTask.name}"
-        test.dependsOn "test${archive.archiveTask.name.capitalize()}"
-        install.dependsOn "publish${publicationName.capitalize()}PublicationToMavenLocal"
+            jar.dependsOn "${archive.archiveTask.name}"
+            test.dependsOn "test${archive.archiveTask.name.capitalize()}"
+            install.dependsOn "publish${publicationName.capitalize()}PublicationToMavenLocal"
+        }
     }
 
     task uploadArchives(group: 'publishing') {
@@ -938,39 +931,33 @@ allprojects {
     }
 }
 
-def configurePom(pom, artifact, desc) {
-    pom.withXml {
-        def root = asNode()
+def configurePom(publication, artifact, desc) {
+    publication.pom {
+        name = artifact
+        description = desc
+        url = 'https://github.com/zonkyio/embedded-postgres-binaries'
 
-        root.children().last() + {
-            resolveStrategy = Closure.DELEGATE_FIRST
+        scm {
+            connection = 'scm:git:git://github.com/zonkyio/embedded-postgres-binaries.git'
+            developerConnection = 'scm:git:ssh://github.com:zonkyio/embedded-postgres-binaries.git'
+            url = 'https://github.com/zonkyio/embedded-postgres-binaries/tree/master'
+        }
 
-            name artifact
-            description desc
-            url 'https://github.com/zonkyio/embedded-postgres-binaries'
-
-            scm {
-                connection 'scm:git:git://github.com/zonkyio/embedded-postgres-binaries.git'
-                developerConnection 'scm:git:ssh://github.com:zonkyio/embedded-postgres-binaries.git'
-                url 'https://github.com/zonkyio/embedded-postgres-binaries/tree/master'
+        licenses {
+            license {
+                name = 'The Apache License, Version 2.0'
+                url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
             }
+        }
 
-            licenses {
-                license {
-                    name 'The Apache License, Version 2.0'
-                    url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                }
+        developers {
+            developer {
+                name = 'Tomas Vanek'
+                email = 'tomix26@gmail.com'
             }
-
-            developers {
-                developer {
-                    name 'Tomas Vanek'
-                    email 'tomix26@gmail.com'
-                }
-                developer {
-                    name 'Zonky Developers'
-                    email 'developers@zonky.cz'
-                }
+            developer {
+                name = 'Zonky Developers'
+                email = 'developers@zonky.cz'
             }
         }
     }
