@@ -2,13 +2,101 @@ name: Release
 on:
   milestone:
     types: [closed]
-
-env:
-  POSTGIS_VERSION: 3.6.2
+  workflow_dispatch:
+    inputs:
+      pg_version:
+        description: "PostgreSQL version or branch to release (16, 17, 18, or an exact patch like 18.3)"
+        required: true
+      pg_bin_version:
+        description: "Optional PostgreSQL Windows x64 binary version override (defaults to <pg_version>-1)"
+        required: false
+      postgis_version:
+        description: "PostGIS version or branch to release (3.4, 3.5, 3.6, or an exact patch like 3.6.2)"
+        required: false
+        default: "3.6.2"
+      include_windows_arm64:
+        description: "Include the experimental Windows arm64 artifact and BOM entry"
+        required: false
+        type: boolean
+        default: false
+      windows_arm64_pg_version:
+        description: "Optional PostgreSQL version or branch override for Windows arm64 when MSYS2 lags behind"
+        required: false
 
 jobs:
+  resolve-inputs:
+    name: Resolve release inputs
+    runs-on: ubuntu-latest
+    outputs:
+      postgres_version: ${{ steps.resolve.outputs.postgres_version }}
+      postgis_version: ${{ steps.resolve.outputs.postgis_version }}
+      release_version: ${{ steps.resolve.outputs.release_version }}
+      windows_pg_bin_version: ${{ steps.resolve.outputs.windows_pg_bin_version }}
+      include_windows_arm64: ${{ steps.resolve.outputs.include_windows_arm64 }}
+      windows_arm64_pg_version: ${{ steps.resolve.outputs.windows_arm64_pg_version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: master
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Resolve effective values
+        id: resolve
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MILESTONE_VERSION: ${{ github.event.milestone.title }}
+          INPUT_PG_VERSION: ${{ inputs.pg_version }}
+          INPUT_PG_BIN_VERSION: ${{ inputs.pg_bin_version }}
+          INPUT_POSTGIS_VERSION: ${{ inputs.postgis_version }}
+          INPUT_INCLUDE_WINDOWS_ARM64: ${{ inputs.include_windows_arm64 }}
+          INPUT_WINDOWS_ARM64_PG_VERSION: ${{ inputs.windows_arm64_pg_version }}
+        run: |
+          extract_resolved_value() {
+            local output=$1
+            local key=$2
+            printf '%s\n' "$output" | sed -n "s/^${key}=//p" | head -n1
+          }
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            PG_VERSION_SPEC=$INPUT_PG_VERSION
+            POSTGIS_VERSION_SPEC=${INPUT_POSTGIS_VERSION:-3.6.2}
+            INCLUDE_WINDOWS_ARM64=${INPUT_INCLUDE_WINDOWS_ARM64:-false}
+            WINDOWS_PG_BIN_SPEC=$INPUT_PG_BIN_VERSION
+            WINDOWS_ARM64_SPEC=${INPUT_WINDOWS_ARM64_PG_VERSION:-$INPUT_PG_VERSION}
+          else
+            PG_VERSION_SPEC=${MILESTONE_VERSION%.*}
+            POSTGIS_VERSION_SPEC=3.6.2
+            INCLUDE_WINDOWS_ARM64=false
+            WINDOWS_PG_BIN_SPEC=
+            WINDOWS_ARM64_SPEC=$PG_VERSION_SPEC
+          fi
+
+          RESOLVED_OUTPUT=$(./gradlew -q --console=plain printResolvedVersions -PpgVersion="$PG_VERSION_SPEC" -PpostgisVersion="$POSTGIS_VERSION_SPEC" -PdistName=windows -ParchName=amd64)
+          RESOLVED_PG_VERSION=$(extract_resolved_value "$RESOLVED_OUTPUT" resolved_pg_version)
+          RESOLVED_POSTGIS_VERSION=$(extract_resolved_value "$RESOLVED_OUTPUT" resolved_postgis_version)
+
+          echo "postgres_version=$RESOLVED_PG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "postgis_version=$RESOLVED_POSTGIS_VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_version=${RESOLVED_PG_VERSION}-${RESOLVED_POSTGIS_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "windows_pg_bin_version=${WINDOWS_PG_BIN_SPEC:-${RESOLVED_PG_VERSION}-1}" >> "$GITHUB_OUTPUT"
+          echo "include_windows_arm64=$INCLUDE_WINDOWS_ARM64" >> "$GITHUB_OUTPUT"
+
+          if [ "$INCLUDE_WINDOWS_ARM64" = "true" ]; then
+            WINDOWS_ARM64_OUTPUT=$(./gradlew -q --console=plain printResolvedVersions -PpgVersion="$WINDOWS_ARM64_SPEC" -PpostgisVersion="$RESOLVED_POSTGIS_VERSION" -PdistName=windows -ParchName=arm64v8)
+            RESOLVED_WINDOWS_ARM64_PG_VERSION=$(extract_resolved_value "$WINDOWS_ARM64_OUTPUT" resolved_pg_version)
+            echo "windows_arm64_pg_version=$RESOLVED_WINDOWS_ARM64_PG_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "windows_arm64_pg_version=" >> "$GITHUB_OUTPUT"
+          fi
+
   linux-amd64:
     name: Linux amd64
+    needs: resolve-inputs
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -22,10 +110,13 @@ jobs:
           java-version: 17
       - name: Set environment variables
         env:
-          MILESTONE_VERSION: ${{ github.event.milestone.title }}
+          POSTGRES_VERSION: ${{ needs.resolve-inputs.outputs.postgres_version }}
+          POSTGIS_VERSION: ${{ needs.resolve-inputs.outputs.postgis_version }}
+          RELEASE_VERSION: ${{ needs.resolve-inputs.outputs.release_version }}
         run: |
-          echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
-          echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
       - name: Build Bundle
         run: ./gradlew :debian-platforms:buildAmd64DebianBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
       - name: Upload bundle
@@ -36,6 +127,7 @@ jobs:
 
   linux-arm64:
     name: Linux arm64
+    needs: resolve-inputs
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout code
@@ -49,10 +141,13 @@ jobs:
           java-version: 17
       - name: Set environment variables
         env:
-          MILESTONE_VERSION: ${{ github.event.milestone.title }}
+          POSTGRES_VERSION: ${{ needs.resolve-inputs.outputs.postgres_version }}
+          POSTGIS_VERSION: ${{ needs.resolve-inputs.outputs.postgis_version }}
+          RELEASE_VERSION: ${{ needs.resolve-inputs.outputs.release_version }}
         run: |
-          echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
-          echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
       - name: Build Bundle
         run: ./gradlew :debian-platforms:buildArm64v8DebianBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
       - name: Upload bundle
@@ -63,6 +158,7 @@ jobs:
 
   alpine-amd64:
     name: Alpine amd64
+    needs: resolve-inputs
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -76,10 +172,13 @@ jobs:
           java-version: 17
       - name: Set environment variables
         env:
-          MILESTONE_VERSION: ${{ github.event.milestone.title }}
+          POSTGRES_VERSION: ${{ needs.resolve-inputs.outputs.postgres_version }}
+          POSTGIS_VERSION: ${{ needs.resolve-inputs.outputs.postgis_version }}
+          RELEASE_VERSION: ${{ needs.resolve-inputs.outputs.release_version }}
         run: |
-          echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
-          echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
       - name: Build Bundle
         run: ./gradlew :alpine-platforms:buildAmd64AlpineBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
       - name: Upload bundle
@@ -90,6 +189,7 @@ jobs:
 
   alpine-arm64:
     name: Alpine arm64
+    needs: resolve-inputs
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout code
@@ -103,10 +203,13 @@ jobs:
           java-version: 17
       - name: Set environment variables
         env:
-          MILESTONE_VERSION: ${{ github.event.milestone.title }}
+          POSTGRES_VERSION: ${{ needs.resolve-inputs.outputs.postgres_version }}
+          POSTGIS_VERSION: ${{ needs.resolve-inputs.outputs.postgis_version }}
+          RELEASE_VERSION: ${{ needs.resolve-inputs.outputs.release_version }}
         run: |
-          echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
-          echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
       - name: Build Bundle
         run: ./gradlew :alpine-platforms:buildArm64v8AlpineBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
       - name: Upload bundle
@@ -116,8 +219,8 @@ jobs:
           path: alpine-platforms/build/tmp/buildArm64v8AlpineBundle/bundle/postgres-linux-alpine_linux.txz
 
   publish-platforms:
-    name: Publish platform artifacts for ${{ github.event.milestone.title }}
-    needs: [linux-amd64, linux-arm64, alpine-amd64, alpine-arm64]
+    name: Publish Linux/Alpine artifacts
+    needs: [linux-amd64, linux-arm64, alpine-amd64, alpine-arm64, resolve-inputs]
     if: ${{ !failure() }}
     runs-on: ubuntu-latest
     steps:
@@ -132,10 +235,13 @@ jobs:
           java-version: 17
       - name: Set environment variables
         env:
-          MILESTONE_VERSION: ${{ github.event.milestone.title }}
+          POSTGRES_VERSION: ${{ needs.resolve-inputs.outputs.postgres_version }}
+          POSTGIS_VERSION: ${{ needs.resolve-inputs.outputs.postgis_version }}
+          RELEASE_VERSION: ${{ needs.resolve-inputs.outputs.release_version }}
         run: |
-          echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
-          echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
       - name: Download bundle - amd64Debian
         uses: actions/download-artifact@v4
         with:
@@ -181,8 +287,8 @@ jobs:
             -PpostgisVersion=$POSTGIS_VERSION
 
   publish-windows-amd64:
-    name: Publish Windows amd64 for ${{ github.event.milestone.title }}
-    needs: [publish-platforms]
+    name: Publish Windows amd64
+    needs: [publish-platforms, resolve-inputs]
     if: ${{ !failure() }}
     runs-on: windows-latest
     steps:
@@ -198,12 +304,15 @@ jobs:
       - name: Set environment variables
         shell: bash
         env:
-          MILESTONE_VERSION: ${{ github.event.milestone.title }}
+          POSTGRES_VERSION: ${{ needs.resolve-inputs.outputs.postgres_version }}
+          POSTGRES_BIN_VERSION: ${{ needs.resolve-inputs.outputs.windows_pg_bin_version }}
+          POSTGIS_VERSION: ${{ needs.resolve-inputs.outputs.postgis_version }}
+          RELEASE_VERSION: ${{ needs.resolve-inputs.outputs.release_version }}
         run: |
-          POSTGRES_VERSION=${MILESTONE_VERSION%.*}
           echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
-          echo "POSTGRES_BIN_VERSION=${POSTGRES_VERSION}-1" >> $GITHUB_ENV
-          echo "RELEASE_VERSION=${POSTGRES_VERSION}-$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_BIN_VERSION=$POSTGRES_BIN_VERSION" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
       - name: Test PostgreSQL/PostGIS bundle
         shell: bash
         run: |
@@ -234,8 +343,8 @@ jobs:
             -Possrh.password=$MAVEN_PASS
 
   publish-macos-arm64:
-    name: Publish macOS arm64 for ${{ github.event.milestone.title }}
-    needs: [publish-windows-amd64]
+    name: Publish macOS arm64
+    needs: [publish-windows-amd64, resolve-inputs]
     if: ${{ !failure() }}
     runs-on: macos-14
     steps:
@@ -255,11 +364,13 @@ jobs:
           echo "$(brew --prefix postgresql)/bin" >> $GITHUB_PATH
       - name: Set environment variables
         env:
-          MILESTONE_VERSION: ${{ github.event.milestone.title }}
+          POSTGRES_VERSION: ${{ needs.resolve-inputs.outputs.postgres_version }}
+          POSTGIS_VERSION: ${{ needs.resolve-inputs.outputs.postgis_version }}
+          RELEASE_VERSION: ${{ needs.resolve-inputs.outputs.release_version }}
         run: |
-          POSTGRES_VERSION=${MILESTONE_VERSION%.*}
           echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
-          echo "RELEASE_VERSION=${POSTGRES_VERSION}-$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
       - name: Test PostgreSQL/PostGIS bundle
         run: |
           ./gradlew :custom-darwin-platform:testCustomDarwinJar \
@@ -285,10 +396,61 @@ jobs:
             -Possrh.username=$MAVEN_USER \
             -Possrh.password=$MAVEN_PASS
 
+  publish-windows-arm64:
+    name: Publish Windows arm64
+    needs: [publish-macos-arm64, resolve-inputs]
+    if: ${{ needs.resolve-inputs.outputs.include_windows_arm64 == 'true' }}
+    runs-on: windows-11-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: master
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Set environment variables
+        shell: bash
+        env:
+          WINDOWS_ARM64_POSTGRES_VERSION: ${{ needs.resolve-inputs.outputs.windows_arm64_pg_version }}
+          POSTGIS_VERSION: ${{ needs.resolve-inputs.outputs.postgis_version }}
+        run: |
+          echo "POSTGRES_VERSION=$WINDOWS_ARM64_POSTGRES_VERSION" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=${WINDOWS_ARM64_POSTGRES_VERSION}-${POSTGIS_VERSION}" >> $GITHUB_ENV
+      - name: Test PostgreSQL/PostGIS bundle
+        shell: bash
+        run: |
+          ./gradlew :custom-windows-platform:testCustomWindowsJar \
+            -Pversion=$RELEASE_VERSION \
+            -PpgVersion=$POSTGRES_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION \
+            -PdistName=windows \
+            -ParchName=arm64v8
+      - name: Publish Windows arm64 artifact
+        shell: bash
+        env:
+          MAVEN_USER: ${{ secrets.MAVEN_USER }}
+          MAVEN_PASS: ${{ secrets.MAVEN_PASS }}
+          ORG_GRADLE_PROJECT_signingKeyId: ${{ secrets.SIGNING_KEY_ID }}
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_CERT }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASS }}
+        run: |
+          ./gradlew :custom-windows-platform:publish --info \
+            -Pversion=$RELEASE_VERSION \
+            -PpgVersion=$POSTGRES_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION \
+            -PdistName=windows \
+            -ParchName=arm64v8 \
+            -Possrh.username=$MAVEN_USER \
+            -Possrh.password=$MAVEN_PASS
+
   publish-bom:
-    name: Publish BOM for ${{ github.event.milestone.title }}
-    needs: [publish-macos-arm64]
-    if: ${{ !failure() }}
+    name: Publish BOM
+    needs: [resolve-inputs, publish-macos-arm64, publish-windows-arm64]
+    if: ${{ always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -302,10 +464,23 @@ jobs:
           java-version: 17
       - name: Set environment variables
         env:
-          MILESTONE_VERSION: ${{ github.event.milestone.title }}
+          POSTGRES_VERSION: ${{ needs.resolve-inputs.outputs.postgres_version }}
+          POSTGIS_VERSION: ${{ needs.resolve-inputs.outputs.postgis_version }}
+          RELEASE_VERSION: ${{ needs.resolve-inputs.outputs.release_version }}
+          INCLUDE_WINDOWS_ARM64: ${{ needs.resolve-inputs.outputs.include_windows_arm64 }}
+          WINDOWS_ARM64_POSTGRES_VERSION: ${{ needs.resolve-inputs.outputs.windows_arm64_pg_version }}
         run: |
-          echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
-          echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          BOM_ARTIFACT_NAMES=embedded-postgres-binaries-linux-amd64,embedded-postgres-binaries-linux-arm64v8,embedded-postgres-binaries-linux-amd64-alpine,embedded-postgres-binaries-linux-arm64v8-alpine,embedded-postgres-binaries-windows-amd64,embedded-postgres-binaries-darwin-arm64v8
+          if [ "$INCLUDE_WINDOWS_ARM64" = "true" ]; then
+            BOM_ARTIFACT_NAMES=$BOM_ARTIFACT_NAMES,embedded-postgres-binaries-windows-arm64v8
+            if [ "$WINDOWS_ARM64_POSTGRES_VERSION" != "$POSTGRES_VERSION" ]; then
+              echo "BOM_ARTIFACT_VERSION_OVERRIDES=embedded-postgres-binaries-windows-arm64v8=${WINDOWS_ARM64_POSTGRES_VERSION}-${POSTGIS_VERSION}" >> $GITHUB_ENV
+            fi
+          fi
+          echo "BOM_ARTIFACT_NAMES=$BOM_ARTIFACT_NAMES" >> $GITHUB_ENV
       - name: Publish BOM
         env:
           MAVEN_USER: ${{ secrets.MAVEN_USER }}
@@ -314,9 +489,9 @@ jobs:
           ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_CERT }}
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASS }}
         run: |
-          BOM_ARTIFACT_NAMES=embedded-postgres-binaries-linux-amd64,embedded-postgres-binaries-linux-arm64v8,embedded-postgres-binaries-linux-amd64-alpine,embedded-postgres-binaries-linux-arm64v8-alpine,embedded-postgres-binaries-windows-amd64,embedded-postgres-binaries-darwin-arm64v8
           ./gradlew publishBomPublicationToMavenRepository --info \
             -PbomArtifactNames=$BOM_ARTIFACT_NAMES \
+            ${BOM_ARTIFACT_VERSION_OVERRIDES:+-PbomArtifactVersionOverrides=$BOM_ARTIFACT_VERSION_OVERRIDES} \
             -Pversion=$RELEASE_VERSION \
             -PpgVersion=$POSTGRES_VERSION \
             -PpostgisVersion=$POSTGIS_VERSION \
@@ -324,8 +499,8 @@ jobs:
             -Possrh.password=$MAVEN_PASS
 
   release:
-    name: Finalize Release ${{ github.event.milestone.title }}
-    needs: [publish-bom]
+    name: Finalize Release
+    needs: [resolve-inputs, publish-bom]
     if: ${{ !failure() }}
     runs-on: ubuntu-latest
     steps:
@@ -339,10 +514,15 @@ jobs:
           git config user.email "bot@zonky.com"
       - name: Set environment variables
         env:
-          MILESTONE_VERSION: ${{ github.event.milestone.title }}
+          POSTGRES_VERSION: ${{ needs.resolve-inputs.outputs.postgres_version }}
+          POSTGIS_VERSION: ${{ needs.resolve-inputs.outputs.postgis_version }}
+          RELEASE_VERSION: ${{ needs.resolve-inputs.outputs.release_version }}
+          MILESTONE_CREATED_AT: ${{ github.event.milestone.created_at }}
         run: |
-          echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
-          echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          echo "TAG_DATE=${MILESTONE_CREATED_AT:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" >> $GITHUB_ENV
       - name: Upload staged artifacts to Central Sonatype
         env:
           SONATYPE_USERNAME: ${{ secrets.MAVEN_USER }}
@@ -364,8 +544,8 @@ jobs:
             echo "Visit https://central.sonatype.com/publishing/deployments to view your artifacts."
           fi
       - name: Create tag
-        env:
-          GIT_COMMITTER_DATE: ${{ github.event.milestone.created_at }}
         run: |
+          export GIT_COMMITTER_DATE="$TAG_DATE"
+          export GIT_AUTHOR_DATE="$TAG_DATE"
           git tag -a v$RELEASE_VERSION -m "PostgreSQL $POSTGRES_VERSION"
           git push -f origin v$RELEASE_VERSION

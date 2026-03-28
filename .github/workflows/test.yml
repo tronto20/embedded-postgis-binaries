@@ -167,7 +167,7 @@ jobs:
   macos:
     name: PostgreSQL ${{ matrix.postgres }} + PostGIS ${{ needs.resolve-inputs.outputs.postgis_version }} (MacOS arm64)
     needs: resolve-inputs
-    runs-on: macos-14
+    runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:

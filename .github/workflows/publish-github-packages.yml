@@ -308,7 +308,7 @@ jobs:
   publish-macos-arm64:
     name: Publish macOS arm64 package
     needs: resolve-inputs
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
