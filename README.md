@@ -59,7 +59,7 @@ The manual `Publish GitHub Packages` workflow publishes a matching BOM plus thes
 
 By default the workflow publishes these six artifacts and the matching BOM. If you set `include_windows_arm64=true`, the experimental Windows arm64 artifact is published as well and the BOM includes that entry.
 
-The default `Checks` and milestone-driven `Release` workflows use the same default platform set:
+The default `Checks`, milestone-driven `Release`, and `Publish GitHub Packages` workflows use the same default platform set:
 
 * `Linux amd64`
 * `Linux arm64`
@@ -67,6 +67,8 @@ The default `Checks` and milestone-driven `Release` workflows use the same defau
 * `Alpine arm64`
 * `Windows amd64`
 * `macOS arm64`
+
+For the Linux and Alpine arm64 targets, these workflows use native GitHub-hosted arm64 Linux runners instead of amd64 runners with QEMU emulation.
 
 Workflow inputs:
 
@@ -289,9 +291,9 @@ Optional parameters:
   - default value: executables are resolved from `/usr/bin` directory or downloaded from https://github.com/multiarch/qemu-user-static/releases/download/v2.12.0
   - supported values: a path to a directory containing qemu executables
 
-The milestone-driven `Release` GitHub Actions workflow now publishes versions in the `<pg_version>-<postgis_version>` format and targets the six default release artifacts listed above. Linux and Alpine are built as four separate jobs (`linux-amd64`, `linux-arm64`, `alpine-amd64`, `alpine-arm64`) so the longest-running builds do not block each other in a single combined job. The repository also includes manual GitHub Actions workflows for `Checks`, `Publish PostGIS Darwin Artifact`, `Publish PostGIS Windows Artifact`, `Publish PostGIS Windows ARM64 Artifact`, and `Publish GitHub Packages`.
+The milestone-driven `Release` GitHub Actions workflow now publishes versions in the `<pg_version>-<postgis_version>` format and targets the six default release artifacts listed above. Linux and Alpine are built as four separate jobs (`linux-amd64`, `linux-arm64`, `alpine-amd64`, `alpine-arm64`) so the longest-running builds do not block each other in a single combined job, and the arm64 jobs run on native arm64 Linux runners. The repository also includes manual GitHub Actions workflows for `Checks`, `Publish PostGIS Darwin Artifact`, `Publish PostGIS Windows Artifact`, `Publish PostGIS Windows ARM64 Artifact`, and `Publish GitHub Packages`.
 
-The manual `Checks` workflow accepts `pg_version` and `postgis_version` so you can verify a specific PostgreSQL/PostGIS combination before publishing. By default it runs the same six-platform matrix as the release line: `linux-amd64`, `linux-arm64`, `alpine-amd64`, `alpine-arm64`, `windows-amd64`, and `macos-arm64`. It also supports optional `pg_bin_version`, `include_windows_arm64`, and `windows_arm64_pg_version` inputs for the Windows paths. `include_windows_arm64` now defaults to `false`.
+The manual `Checks` workflow accepts `pg_version` and `postgis_version` so you can verify a specific PostgreSQL/PostGIS combination before publishing. By default it runs the same six-platform matrix as the release line: `linux-amd64`, `linux-arm64`, `alpine-amd64`, `alpine-arm64`, `windows-amd64`, and `macos-arm64`. The Linux and Alpine arm64 checks run on native arm64 Linux runners. It also supports optional `pg_bin_version`, `include_windows_arm64`, and `windows_arm64_pg_version` inputs for the Windows paths. `include_windows_arm64` now defaults to `false`.
 
 For the manual workflows, branch inputs are resolved automatically before Gradle runs:
 

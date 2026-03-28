@@ -107,7 +107,7 @@ jobs:
   linux-arm64:
     name: PostgreSQL ${{ matrix.postgres }} + PostGIS ${{ needs.resolve-inputs.outputs.postgis_version }} (Linux arm64)
     needs: resolve-inputs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     strategy:
       fail-fast: false
       matrix:
@@ -147,7 +147,7 @@ jobs:
   alpine-arm64:
     name: PostgreSQL ${{ matrix.postgres }} + PostGIS ${{ needs.resolve-inputs.outputs.postgis_version }} (Alpine arm64)
     needs: resolve-inputs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     strategy:
       fail-fast: false
       matrix:

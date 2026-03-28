@@ -1005,7 +1005,7 @@ def resolveQemuBindings() {
 static def defaultDebianImage(archName, useEmulation) {
     def system = OperatingSystem.current()
 
-    if (archName == system.getArch()) {
+    if (normalizeArchName(archName) == normalizeArchName(system.getArch())) {
         return 'ubuntu:18.04'
     } else if (system.isMacOsX() || useEmulation) {
         return "$archName/ubuntu:18.04"
@@ -1020,7 +1020,7 @@ static def defaultDebianImage(archName, useEmulation) {
 static def defaultAlpineImage(archName, useEmulation) {
     def system = OperatingSystem.current()
 
-    if (archName == system.getArch()) {
+    if (normalizeArchName(archName) == normalizeArchName(system.getArch())) {
         return 'alpine:3.9'
     } else if (system.isMacOsX() || useEmulation) {
         return "$archName/alpine:3.9"

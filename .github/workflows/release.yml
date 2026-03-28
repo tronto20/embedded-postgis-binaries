@@ -26,8 +26,6 @@ jobs:
         run: |
           echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
           echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
-      - name: Register QEMU
-        run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
       - name: Build Bundle
         run: ./gradlew :debian-platforms:buildAmd64DebianBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
       - name: Upload bundle
@@ -38,7 +36,7 @@ jobs:
 
   linux-arm64:
     name: Linux arm64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -55,8 +53,6 @@ jobs:
         run: |
           echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
           echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
-      - name: Register QEMU
-        run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
       - name: Build Bundle
         run: ./gradlew :debian-platforms:buildArm64v8DebianBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
       - name: Upload bundle
@@ -84,8 +80,6 @@ jobs:
         run: |
           echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
           echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
-      - name: Register QEMU
-        run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
       - name: Build Bundle
         run: ./gradlew :alpine-platforms:buildAmd64AlpineBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
       - name: Upload bundle
@@ -96,7 +90,7 @@ jobs:
 
   alpine-arm64:
     name: Alpine arm64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -113,8 +107,6 @@ jobs:
         run: |
           echo "POSTGRES_VERSION=${MILESTONE_VERSION%.*}" >> $GITHUB_ENV
           echo "RELEASE_VERSION=${MILESTONE_VERSION%.*}-$POSTGIS_VERSION" >> $GITHUB_ENV
-      - name: Register QEMU
-        run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
       - name: Build Bundle
         run: ./gradlew :alpine-platforms:buildArm64v8AlpineBundle -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION
       - name: Upload bundle

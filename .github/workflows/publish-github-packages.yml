@@ -78,8 +78,8 @@ jobs:
             echo "windows_arm64_pg_version=" >> "$GITHUB_OUTPUT"
           fi
 
-  publish-linux-and-alpine:
-    name: Publish Linux/Alpine packages
+  publish-linux-amd64:
+    name: Publish Linux amd64 package
     needs: resolve-inputs
     runs-on: ubuntu-latest
     steps:
@@ -100,18 +100,121 @@ jobs:
           echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
           echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
           echo "GITHUB_PACKAGES_URL=https://maven.pkg.github.com/${GITHUB_REPOSITORY}" >> $GITHUB_ENV
-      - name: Register QEMU
-        run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
       - name: Validate build inputs
         run: ./gradlew validateInputs -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION -PpublishTarget=githubPackages -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
-      - name: Publish Linux/Alpine packages to GitHub Packages
+      - name: Publish Linux amd64 package to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ./gradlew --info \
             :debian-platforms:publishAmd64DebianPublicationToGithubPackagesRepository \
+            -Pversion=$RELEASE_VERSION \
+            -PpgVersion=$POSTGRES_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION \
+            -PpublishTarget=githubPackages \
+            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+
+  publish-linux-arm64:
+    name: Publish Linux arm64 package
+    needs: resolve-inputs
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Set environment variables
+        env:
+          POSTGRES_VERSION: ${{ needs.resolve-inputs.outputs.postgres_version }}
+          POSTGIS_VERSION: ${{ needs.resolve-inputs.outputs.postgis_version }}
+          RELEASE_VERSION: ${{ needs.resolve-inputs.outputs.release_version }}
+        run: |
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "GITHUB_PACKAGES_URL=https://maven.pkg.github.com/${GITHUB_REPOSITORY}" >> $GITHUB_ENV
+      - name: Validate build inputs
+        run: ./gradlew validateInputs -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION -PpublishTarget=githubPackages -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+      - name: Publish Linux arm64 package to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./gradlew --info \
             :debian-platforms:publishArm64v8DebianPublicationToGithubPackagesRepository \
+            -Pversion=$RELEASE_VERSION \
+            -PpgVersion=$POSTGRES_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION \
+            -PpublishTarget=githubPackages \
+            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+
+  publish-alpine-amd64:
+    name: Publish Alpine amd64 package
+    needs: resolve-inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Set environment variables
+        env:
+          POSTGRES_VERSION: ${{ needs.resolve-inputs.outputs.postgres_version }}
+          POSTGIS_VERSION: ${{ needs.resolve-inputs.outputs.postgis_version }}
+          RELEASE_VERSION: ${{ needs.resolve-inputs.outputs.release_version }}
+        run: |
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "GITHUB_PACKAGES_URL=https://maven.pkg.github.com/${GITHUB_REPOSITORY}" >> $GITHUB_ENV
+      - name: Validate build inputs
+        run: ./gradlew validateInputs -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION -PpublishTarget=githubPackages -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+      - name: Publish Alpine amd64 package to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./gradlew --info \
             :alpine-platforms:publishAmd64AlpinePublicationToGithubPackagesRepository \
+            -Pversion=$RELEASE_VERSION \
+            -PpgVersion=$POSTGRES_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION \
+            -PpublishTarget=githubPackages \
+            -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+
+  publish-alpine-arm64:
+    name: Publish Alpine arm64 package
+    needs: resolve-inputs
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Set environment variables
+        env:
+          POSTGRES_VERSION: ${{ needs.resolve-inputs.outputs.postgres_version }}
+          POSTGIS_VERSION: ${{ needs.resolve-inputs.outputs.postgis_version }}
+          RELEASE_VERSION: ${{ needs.resolve-inputs.outputs.release_version }}
+        run: |
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> $GITHUB_ENV
+          echo "POSTGIS_VERSION=$POSTGIS_VERSION" >> $GITHUB_ENV
+          echo "GITHUB_PACKAGES_URL=https://maven.pkg.github.com/${GITHUB_REPOSITORY}" >> $GITHUB_ENV
+      - name: Validate build inputs
+        run: ./gradlew validateInputs -Pversion=$RELEASE_VERSION -PpgVersion=$POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION -PpublishTarget=githubPackages -PgithubPackagesUrl=$GITHUB_PACKAGES_URL
+      - name: Publish Alpine arm64 package to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./gradlew --info \
             :alpine-platforms:publishArm64v8AlpinePublicationToGithubPackagesRepository \
             -Pversion=$RELEASE_VERSION \
             -PpgVersion=$POSTGRES_VERSION \
@@ -250,7 +353,10 @@ jobs:
     if: ${{ always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     needs:
       - resolve-inputs
-      - publish-linux-and-alpine
+      - publish-linux-amd64
+      - publish-linux-arm64
+      - publish-alpine-amd64
+      - publish-alpine-arm64
       - publish-windows-x64
       - publish-windows-arm64
       - publish-macos-arm64
