@@ -1,148 +1,239 @@
 name: Checks
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      pg_version:
+        description: "PostgreSQL version or branch to test (16, 17, 18, or an exact patch like 18.3)"
+        required: true
+      postgis_version:
+        description: "PostGIS version or branch to test (3.4, 3.5, 3.6, or an exact patch like 3.6.2)"
+        required: false
+        default: "3.6.2"
+      pg_bin_version:
+        description: "Optional PostgreSQL Windows x64 binary version override (defaults to <pg_version>-1)"
+        required: false
+      include_windows_arm64:
+        description: "Include the experimental Windows arm64 check"
+        required: false
+        type: boolean
+        default: false
+      windows_arm64_pg_version:
+        description: "Optional PostgreSQL version or branch override for Windows arm64 when MSYS2 lags behind"
+        required: false
 jobs:
-  linux:
-    name: PostgreSQL ${{ matrix.postgres }} (Linux)
+  resolve-inputs:
+    name: Resolve workflow inputs
+    runs-on: ubuntu-latest
+    outputs:
+      postgres_matrix: ${{ steps.resolve.outputs.postgres_matrix }}
+      postgis_version: ${{ steps.resolve.outputs.postgis_version }}
+      windows_pg_bin_version: ${{ steps.resolve.outputs.windows_pg_bin_version }}
+      include_windows_arm64: ${{ steps.resolve.outputs.include_windows_arm64 }}
+      windows_arm64_pg_version: ${{ steps.resolve.outputs.windows_arm64_pg_version }}
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Resolve effective values
+        id: resolve
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_PG_VERSION: ${{ inputs.pg_version }}
+          INPUT_POSTGIS_VERSION: ${{ inputs.postgis_version }}
+          INPUT_PG_BIN_VERSION: ${{ inputs.pg_bin_version }}
+          INPUT_INCLUDE_WINDOWS_ARM64: ${{ inputs.include_windows_arm64 }}
+          INPUT_WINDOWS_ARM64_PG_VERSION: ${{ inputs.windows_arm64_pg_version }}
+        run: |
+          extract_resolved_value() {
+            local output=$1
+            local key=$2
+            printf '%s\n' "$output" | sed -n "s/^${key}=//p" | head -n1
+          }
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            RESOLVED_OUTPUT=$(./gradlew -q --console=plain printResolvedVersions -PpgVersion="$INPUT_PG_VERSION" -PpostgisVersion="${INPUT_POSTGIS_VERSION:-3.6.2}" -PdistName=windows -ParchName=amd64)
+            RESOLVED_PG_VERSION=$(extract_resolved_value "$RESOLVED_OUTPUT" resolved_pg_version)
+            RESOLVED_POSTGIS_VERSION=$(extract_resolved_value "$RESOLVED_OUTPUT" resolved_postgis_version)
+            INCLUDE_WINDOWS_ARM64=${INPUT_INCLUDE_WINDOWS_ARM64:-false}
+
+            echo "postgres_matrix=[\"$RESOLVED_PG_VERSION\"]" >> "$GITHUB_OUTPUT"
+            echo "postgis_version=$RESOLVED_POSTGIS_VERSION" >> "$GITHUB_OUTPUT"
+            echo "windows_pg_bin_version=${INPUT_PG_BIN_VERSION:-${RESOLVED_PG_VERSION}-1}" >> "$GITHUB_OUTPUT"
+            echo "include_windows_arm64=$INCLUDE_WINDOWS_ARM64" >> "$GITHUB_OUTPUT"
+
+            if [ "$INCLUDE_WINDOWS_ARM64" = "true" ]; then
+              WINDOWS_ARM64_SPEC=${INPUT_WINDOWS_ARM64_PG_VERSION:-$INPUT_PG_VERSION}
+              WINDOWS_ARM64_OUTPUT=$(./gradlew -q --console=plain printResolvedVersions -PpgVersion="$WINDOWS_ARM64_SPEC" -PpostgisVersion="$RESOLVED_POSTGIS_VERSION" -PdistName=windows -ParchName=arm64v8)
+              RESOLVED_WINDOWS_ARM64_PG_VERSION=$(extract_resolved_value "$WINDOWS_ARM64_OUTPUT" resolved_pg_version)
+              echo "windows_arm64_pg_version=$RESOLVED_WINDOWS_ARM64_PG_VERSION" >> "$GITHUB_OUTPUT"
+            else
+              echo "windows_arm64_pg_version=" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo 'postgres_matrix=["18.3","17.9","16.13"]' >> "$GITHUB_OUTPUT"
+            echo "postgis_version=3.6.2" >> "$GITHUB_OUTPUT"
+            echo "windows_pg_bin_version=" >> "$GITHUB_OUTPUT"
+            echo "include_windows_arm64=false" >> "$GITHUB_OUTPUT"
+            echo "windows_arm64_pg_version=18.2" >> "$GITHUB_OUTPUT"
+          fi
+
+  linux-amd64:
+    name: PostgreSQL ${{ matrix.postgres }} + PostGIS ${{ needs.resolve-inputs.outputs.postgis_version }} (Linux amd64)
+    needs: resolve-inputs
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        postgres: ["18.3", "17.9", "16.13", "15.17", "14.22"]
+        postgres: ${{ fromJson(needs.resolve-inputs.outputs.postgres_matrix) }}
     steps:
       - name: Checkout project
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Set up JDK
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: 15
+          java-version: 17
       - name: Test PostgreSQL bundle
-        if: ${{ !(startsWith(matrix.postgres, '10.') || startsWith(matrix.postgres, '9.')) }}
-        run: ./gradlew :debian-platforms:testAmd64DebianJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }}
-        timeout-minutes: 10
-      - name: Test PostgreSQL bundle (repacked)
-        if: ${{ startsWith(matrix.postgres, '10.') || startsWith(matrix.postgres, '9.') }}
-        run: ./gradlew :repacked-platforms:testAmd64LinuxJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }}
-        timeout-minutes: 10
-      - name: Test PostgreSQL bundle (compiled)
-        if: ${{ startsWith(matrix.postgres, '10.') || startsWith(matrix.postgres, '9.') }}
-        run: ./gradlew :custom-debian-platform:testCustomDebianJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }} -ParchName=amd64
-        timeout-minutes: 10
-  alpine-linux:
-    name: PostgreSQL ${{ matrix.postgres }} (Alpine Linux)
+        run: ./gradlew :debian-platforms:testAmd64DebianJar -PpgVersion=${{ matrix.postgres }} -PpostgisVersion=${{ needs.resolve-inputs.outputs.postgis_version }}
+        timeout-minutes: 30
+
+  linux-arm64:
+    name: PostgreSQL ${{ matrix.postgres }} + PostGIS ${{ needs.resolve-inputs.outputs.postgis_version }} (Linux arm64)
+    needs: resolve-inputs
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ${{ fromJson(needs.resolve-inputs.outputs.postgres_matrix) }}
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Test PostgreSQL bundle
+        run: ./gradlew :debian-platforms:testArm64v8DebianJar -PpgVersion=${{ matrix.postgres }} -PpostgisVersion=${{ needs.resolve-inputs.outputs.postgis_version }}
+        timeout-minutes: 45
+
+  alpine-amd64:
+    name: PostgreSQL ${{ matrix.postgres }} + PostGIS ${{ needs.resolve-inputs.outputs.postgis_version }} (Alpine amd64)
+    needs: resolve-inputs
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        postgres: ["18.3", "17.9", "16.13", "15.17", "14.22"]
+        postgres: ${{ fromJson(needs.resolve-inputs.outputs.postgres_matrix) }}
     steps:
       - name: Checkout project
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Set up JDK
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: 15
+          java-version: 17
       - name: Test PostgreSQL bundle
-        run: ./gradlew :alpine-platforms:testAmd64AlpineJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }}
-        timeout-minutes: 10
-      - name: Test PostgreSQL bundle (lite)
-        if: ${{ startsWith(matrix.postgres, '10.') || startsWith(matrix.postgres, '11.') || startsWith(matrix.postgres, '12.') || startsWith(matrix.postgres, '13.') || startsWith(matrix.postgres, '14.') || startsWith(matrix.postgres, '15.') }}
-        run: ./gradlew :alpine-lite-platforms:testAmd64AlpineLiteJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }}
-        timeout-minutes: 10
+        run: ./gradlew :alpine-platforms:testAmd64AlpineJar -PpgVersion=${{ matrix.postgres }} -PpostgisVersion=${{ needs.resolve-inputs.outputs.postgis_version }}
+        timeout-minutes: 30
+
+  alpine-arm64:
+    name: PostgreSQL ${{ matrix.postgres }} + PostGIS ${{ needs.resolve-inputs.outputs.postgis_version }} (Alpine arm64)
+    needs: resolve-inputs
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ${{ fromJson(needs.resolve-inputs.outputs.postgres_matrix) }}
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Test PostgreSQL bundle
+        run: ./gradlew :alpine-platforms:testArm64v8AlpineJar -PpgVersion=${{ matrix.postgres }} -PpostgisVersion=${{ needs.resolve-inputs.outputs.postgis_version }}
+        timeout-minutes: 45
+
   macos:
-    name: PostgreSQL ${{ matrix.postgres }} (MacOS)
+    name: PostgreSQL ${{ matrix.postgres }} + PostGIS ${{ needs.resolve-inputs.outputs.postgis_version }} (MacOS arm64)
+    needs: resolve-inputs
     runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
-        postgres: ["18.3", "17.9", "16.13", "15.17", "14.22"]
+        postgres: ${{ fromJson(needs.resolve-inputs.outputs.postgres_matrix) }}
     steps:
       - name: Checkout project
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Set up JDK
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: 15
-      - name: Install psql executables
-        run: |
-          brew update
-          brew install postgresql
-          echo "$(brew --prefix postgresql)/bin" >> $GITHUB_PATH
-      - name: Test PostgreSQL bundle
-        run: ./gradlew :repacked-platforms:testAmd64DarwinJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }}
-        timeout-minutes: 10
-  macos-postgis:
-    name: PostgreSQL 18.3 + PostGIS 3.6.2 (MacOS arm64)
-    runs-on: macos-14
-    steps:
-      - name: Checkout project
-        uses: actions/checkout@v3
-      - name: Set up JDK
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'zulu'
-          java-version: 15
+          java-version: 17
       - name: Install psql executables
         run: |
           brew update
           brew install postgresql
           echo "$(brew --prefix postgresql)/bin" >> $GITHUB_PATH
       - name: Test PostgreSQL/PostGIS bundle
-        run: ./gradlew :custom-darwin-platform:testCustomDarwinJar -Pversion=18.3.0-TEST -PpgVersion=18.3 -PpostgisVersion=3.6.2 -PdistName=darwin -ParchName=arm64v8
+        run: ./gradlew :custom-darwin-platform:testCustomDarwinJar -PpgVersion=${{ matrix.postgres }} -PpostgisVersion=${{ needs.resolve-inputs.outputs.postgis_version }} -PdistName=darwin -ParchName=arm64v8
         timeout-minutes: 45
+
   windows:
-    name: PostgreSQL ${{ matrix.postgres }} (Windows)
+    name: PostgreSQL ${{ matrix.postgres }} + PostGIS ${{ needs.resolve-inputs.outputs.postgis_version }} (Windows amd64)
+    needs: resolve-inputs
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
-        postgres: ["18.3", "17.9", "16.13", "15.17", "14.22"]
+        postgres: ${{ fromJson(needs.resolve-inputs.outputs.postgres_matrix) }}
     steps:
       - name: Checkout project
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Set up JDK
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: 15
+          java-version: 17
       - name: Install GNU Wget
         run: choco install wget
       - name: Update system paths
         run: echo $PGBIN >> $GITHUB_PATH
         shell: bash
-      - name: Test PostgreSQL bundle
-        run: ./gradlew :repacked-platforms:testAmd64WindowsJar -Pversion=${{ matrix.postgres }}-TEST -PpgVersion=${{ matrix.postgres }}
-        shell: bash
-        timeout-minutes: 10
-  windows-postgis:
-    name: PostgreSQL 18.3 + PostGIS 3.6.2 (Windows)
-    runs-on: windows-latest
-    steps:
-      - name: Checkout project
-        uses: actions/checkout@v3
-      - name: Set up JDK
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'zulu'
-          java-version: 15
       - name: Test PostgreSQL/PostGIS bundle
-        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=18.3.0-TEST -PpgVersion=18.3 -PpostgisVersion=3.6.2 -PdistName=windows -ParchName=amd64
         shell: bash
+        env:
+          POSTGRES_BIN_VERSION: ${{ needs.resolve-inputs.outputs.windows_pg_bin_version != '' && needs.resolve-inputs.outputs.windows_pg_bin_version || format('{0}-1', matrix.postgres) }}
+        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -PpgVersion=${{ matrix.postgres }} -PpgBinVersion=$POSTGRES_BIN_VERSION -PpostgisVersion=${{ needs.resolve-inputs.outputs.postgis_version }} -PdistName=windows -ParchName=amd64
         timeout-minutes: 25
-  windows-postgis-arm64:
-    name: PostgreSQL 18.2 + PostGIS 3.6.2 (Windows ARM64)
+
+  windows-arm64:
+    name: PostgreSQL ${{ needs.resolve-inputs.outputs.windows_arm64_pg_version }} + PostGIS ${{ needs.resolve-inputs.outputs.postgis_version }} (Windows ARM64)
+    needs: resolve-inputs
+    if: ${{ needs.resolve-inputs.outputs.include_windows_arm64 == 'true' }}
     runs-on: windows-11-arm
     steps:
       - name: Checkout project
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Set up JDK
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: 15
+          java-version: 17
       - name: Test PostgreSQL/PostGIS bundle
-        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -Pversion=18.2.0-TEST -PpgVersion=18.2 -PpostgisVersion=3.6.2 -PdistName=windows -ParchName=arm64v8
         shell: bash
+        env:
+          WINDOWS_ARM64_POSTGRES_VERSION: ${{ needs.resolve-inputs.outputs.windows_arm64_pg_version }}
+          POSTGIS_VERSION: ${{ needs.resolve-inputs.outputs.postgis_version }}
+        run: ./gradlew :custom-windows-platform:testCustomWindowsJar -PpgVersion=$WINDOWS_ARM64_POSTGRES_VERSION -PpostgisVersion=$POSTGIS_VERSION -PdistName=windows -ParchName=arm64v8
         timeout-minutes: 30

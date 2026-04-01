@@ -1,5 +1,5 @@
 #!/bin/bash
-set -ex
+set -eux
 
 DOCKER_OPTS=
 POSTGIS_VERSION=
@@ -41,7 +41,7 @@ EOF
     if [ "$POSTGIS_MAJOR" -gt 3 ] || { [ "$POSTGIS_MAJOR" -eq 3 ] && [ "$POSTGIS_MINOR" -ge 4 ]; }; then
         PROJ_VERSION=6.1.1
     fi
-    if [ "$POSTGIS_MAJOR" -gt 3 ] || { [ "$POSTGIS_MAJOR" -eq 3 ] && [ "$POSTGIS_MINOR" -ge 6 ]; }; then
+    if [ "$POSTGIS_MAJOR" -gt 3 ] || { [ "$POSTGIS_MAJOR" -eq 3 ] && [ "$POSTGIS_MINOR" -ge 5 ]; }; then
         GEOS_VERSION=3.8.1
         GDAL_VERSION=3.0.4
     fi
@@ -120,7 +120,7 @@ $DOCKER_OPTS $IMG_NAME /bin/bash -ex -c 'echo "Starting building postgres binari
     && make -C contrib install \
     \
     && if [ -n "$POSTGIS_VERSION" ]; then \
-      apt-get install -y --no-install-recommends curl libjson-c-dev libsqlite3-0 libsqlite3-dev sqlite3 unzip \
+      apt-get install -y --no-install-recommends curl gettext libjson-c-dev libprotobuf-c-dev libprotobuf-c1 protobuf-c-compiler libsqlite3-0 libsqlite3-dev sqlite3 unzip \
       && mkdir -p /usr/src/proj \
         && curl -sL "https://download.osgeo.org/proj/proj-$PROJ_VERSION.tar.gz" | tar -xzf - -C /usr/src/proj --strip-components 1 \
         && cd /usr/src/proj \
@@ -144,7 +144,8 @@ $DOCKER_OPTS $IMG_NAME /bin/bash -ex -c 'echo "Starting building postgres binari
         && cd /usr/src/gdal \
         && curl -sL "https://gitlab.com/freedesktop-sdk/mirrors/savannah/config/-/raw/8de5d272823855dd8d81fee50418f4ebf7e79ed9/config.guess" > config.guess \
         && curl -sL "https://gitlab.com/freedesktop-sdk/mirrors/savannah/config/-/raw/b8ee5f79949d1d40e8820a774d813660e1be52d3/config.sub" > config.sub \
-        && ./configure --disable-static --prefix=/usr/local/pg-build \
+        && cp /usr/share/gettext/config.rpath ./config.rpath \
+        && ./configure --disable-static --prefix=/usr/local/pg-build --with-proj=/usr/local/pg-build \
         && make -j$(nproc) \
         && make install \
       && mkdir -p /usr/src/postgis \
@@ -152,22 +153,27 @@ $DOCKER_OPTS $IMG_NAME /bin/bash -ex -c 'echo "Starting building postgres binari
         && cd /usr/src/postgis \
         && curl -sL "https://gitlab.com/freedesktop-sdk/mirrors/savannah/config/-/raw/8de5d272823855dd8d81fee50418f4ebf7e79ed9/config.guess" > config.guess \
         && curl -sL "https://gitlab.com/freedesktop-sdk/mirrors/savannah/config/-/raw/b8ee5f79949d1d40e8820a774d813660e1be52d3/config.sub" > config.sub \
+        && mkdir -p config \
+        && ln -sf ../build-aux/install-sh config/install-sh \
+        && ln -sf build-aux/config.rpath config.rpath \
         && ./configure \
             --prefix=/usr/local/pg-build \
             --with-pgconfig=/usr/local/pg-build/bin/pg_config \
             --with-geosconfig=/usr/local/pg-build/bin/geos-config \
             --with-projdir=/usr/local/pg-build \
             --with-gdalconfig=/usr/local/pg-build/bin/gdal-config \
+            --with-gettext=no \
         && make -j$(nproc) \
         && make install \
     ; fi \
     \
     && cd /usr/local/pg-build \
+    && mkdir -p ./lib \
     && cp /usr/lib/libossp-uuid.so.16 ./lib || cp /usr/lib/*/libossp-uuid.so.16 ./lib \
     && cp /lib/*/libz.so.1 /lib/*/liblzma.so.5 /usr/lib/*/libxml2.so.2 /usr/lib/*/libxslt.so.1 ./lib \
     && cp /lib/*/libssl.so.1* /lib/*/libcrypto.so.1* ./lib || cp /usr/lib/*/libssl.so.1* /usr/lib/*/libcrypto.so.1* ./lib \
     && if [ "$ICU_ENABLED" = true ]; then cp --no-dereference /usr/lib/*/libicudata.so* /usr/lib/*/libicuuc.so* /usr/lib/*/libicui18n.so* ./lib; fi \
-    && if [ -n "$POSTGIS_VERSION" ]; then cp --no-dereference /lib/*/libjson-c.so* /usr/lib/*/libsqlite3.so* ./lib ; fi \
+    && if [ -n "$POSTGIS_VERSION" ]; then cp --no-dereference /lib/*/libjson-c.so* /usr/lib/*/libsqlite3.so* /usr/lib/*/libprotobuf-c.so* ./lib ; fi \
     && find ./bin -type f \( -name "initdb" -o -name "pg_ctl" -o -name "postgres" \) -print0 | xargs -0 -n1 patchelf --set-rpath "\$ORIGIN/../lib" \
     && find ./lib -maxdepth 1 -type f -name "*.so*" -print0 | xargs -0 -n1 patchelf --set-rpath "\$ORIGIN" \
     && find ./lib/postgresql -maxdepth 1 -type f -name "*.so*" -print0 | xargs -0 -n1 patchelf --set-rpath "\$ORIGIN/.." \
