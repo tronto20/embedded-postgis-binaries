@@ -526,7 +526,9 @@ allprojects {
 
         if (publishTargetParam == "mavenCentral") {
             val signingKey = resolveSigningKeyMaterial(findProperty("signingKey")?.toString() ?: System.getenv("SIGNING_KEY"))
-            val signingKeyId = findProperty("signingKeyId")?.toString() ?: System.getenv("SIGNING_KEY_ID")
+            val signingKeyId = (
+                findProperty("signingKeyId")?.toString() ?: System.getenv("SIGNING_KEY_ID")
+                )?.takeIf { it.isNotBlank() }
             val signingPassword = findProperty("signingPassword")?.toString()
                 ?: System.getenv("SIGNING_PASSWORD")
                 ?: ""
