@@ -56,6 +56,20 @@ fun normalizeVersionSpec(spec: String?): String {
     return if (value.endsWith(".x")) value.dropLast(2) else value
 }
 
+fun resolveSigningKeyMaterial(rawValue: String?): String? {
+    val value = rawValue?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    if (value.contains("-----BEGIN PGP")) {
+        return value
+    }
+
+    return try {
+        val decoded = String(Base64.getMimeDecoder().decode(value), StandardCharsets.UTF_8).trim()
+        if (decoded.contains("-----BEGIN PGP")) decoded else value
+    } catch (_: IllegalArgumentException) {
+        value
+    }
+}
+
 fun versionComponents(version: String): List<Int> = version.split('.').map { it.toInt() }
 
 fun compareVersionComponents(left: List<Int>, right: List<Int>): Int {
@@ -511,9 +525,11 @@ allprojects {
         }
 
         if (publishTargetParam == "mavenCentral") {
-            val signingKey = findProperty("signingKey")?.toString() ?: System.getenv("SIGNING_KEY")
+            val signingKey = resolveSigningKeyMaterial(findProperty("signingKey")?.toString() ?: System.getenv("SIGNING_KEY"))
             val signingKeyId = findProperty("signingKeyId")?.toString() ?: System.getenv("SIGNING_KEY_ID")
-            val signingPassword = findProperty("signingPassword")?.toString() ?: System.getenv("SIGNING_PASSWORD")
+            val signingPassword = (
+                findProperty("signingPassword")?.toString() ?: System.getenv("SIGNING_PASSWORD")
+                )?.takeIf { it.isNotBlank() }
             useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)
 
             val publishing = extensions.getByType(PublishingExtension::class.java)
@@ -633,21 +649,34 @@ val validateInputs = tasks.register("validateInputs") {
 }
 
 fun requireMavenCentralCredentials() {
-    if (mavenCentralUsername.isNullOrBlank() || mavenCentralPassword.isNullOrBlank()) {
+    val missing = mutableListOf<String>()
+    if (mavenCentralUsername.isNullOrBlank()) {
+        missing += "mavenCentralUsername"
+    }
+    if (mavenCentralPassword.isNullOrBlank()) {
+        missing += "mavenCentralPassword"
+    }
+    if (missing.isNotEmpty()) {
         throw GradleException(
-            "Maven Central credentials are required. Set 'mavenCentralUsername'/'mavenCentralPassword' " +
-                "or the SONATYPE/MAVEN_CENTRAL environment variable equivalents.",
+            "Missing Maven Central credential properties: ${missing.joinToString(", ")}. " +
+                "Set them as Gradle properties or via ORG_GRADLE_PROJECT_mavenCentralUsername / " +
+                "ORG_GRADLE_PROJECT_mavenCentralPassword.",
         )
     }
 }
 
 fun requireSigningConfiguration() {
-    val signingKey = findProperty("signingKey")?.toString() ?: System.getenv("SIGNING_KEY")
-    val signingPassword = findProperty("signingPassword")?.toString() ?: System.getenv("SIGNING_PASSWORD")
-    if (signingKey.isNullOrBlank() || signingPassword.isNullOrBlank()) {
+    val signingKey = resolveSigningKeyMaterial(findProperty("signingKey")?.toString() ?: System.getenv("SIGNING_KEY"))
+    val missing = mutableListOf<String>()
+    if (signingKey.isNullOrBlank()) {
+        missing += "signingKey"
+    }
+    if (missing.isNotEmpty()) {
         throw GradleException(
-            "Signing is required for Maven Central publishing. Provide 'signingKey' and 'signingPassword' " +
-                "(and optionally 'signingKeyId') as Gradle properties or environment variables.",
+            "Missing signing properties: ${missing.joinToString(", ")}. " +
+                "Set them as Gradle properties or via ORG_GRADLE_PROJECT_signingKey. " +
+                "The signing key may be raw ASCII-armored text or a base64-encoded copy of that text. " +
+                "If the private key is passphrase-protected, also provide ORG_GRADLE_PROJECT_signingPassword.",
         )
     }
 }
