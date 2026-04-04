@@ -425,8 +425,21 @@ fun configurePom(publication: MavenPublication, artifact: String, desc: String) 
 fun registerBundlePublication(project: Project, publicationName: String, artifactIdValue: String, jarTask: TaskProvider<Jar>, testTask: TaskProvider<out Task>? = null) {
     project.artifacts.add("bundles", jarTask)
 
-    val sourcesJar = project.tasks.named("sourcesJar", Jar::class.java)
-    val javadocJar = project.tasks.named("javadocJar", Jar::class.java)
+    val sourceSets = project.extensions.getByType(SourceSetContainer::class.java)
+    val mainSourceSet = sourceSets.getByName("main")
+    val javadocTask = project.tasks.named("javadoc", Javadoc::class.java)
+    val sourcesJar = project.tasks.register("${publicationName}SourcesJar", Jar::class.java) {
+        dependsOn(project.tasks.named("classes"))
+        from(mainSourceSet.allSource)
+        archiveBaseName.set(artifactIdValue)
+        archiveClassifier.set("sources")
+    }
+    val javadocJar = project.tasks.register("${publicationName}JavadocJar", Jar::class.java) {
+        dependsOn(javadocTask)
+        from(javadocTask.map { it.destinationDir })
+        archiveBaseName.set(artifactIdValue)
+        archiveClassifier.set("javadoc")
+    }
 
     project.extensions.configure(PublishingExtension::class.java) {
         publications.create(publicationName, MavenPublication::class.java) {
@@ -572,19 +585,6 @@ subprojects {
     }
 
     configurations.maybeCreate("bundles")
-
-    val sourceSets = extensions.getByType(SourceSetContainer::class.java)
-    val sourcesJar = tasks.register("sourcesJar", Jar::class.java) {
-        dependsOn(tasks.named("classes"))
-        from(sourceSets.getByName("main").allSource)
-        archiveClassifier.set("sources")
-    }
-    val javadocJar = tasks.register("javadocJar", Jar::class.java) {
-        dependsOn(tasks.named("javadoc"))
-        from(tasks.named("javadoc", Javadoc::class.java).map { it.destinationDir })
-        archiveClassifier.set("javadoc")
-    }
-
 }
 
 val validateInputs = tasks.register("validateInputs") {
