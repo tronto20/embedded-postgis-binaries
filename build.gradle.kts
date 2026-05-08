@@ -701,6 +701,7 @@ val checkMavenCentralPublishing = tasks.register("checkMavenCentralPublishing") 
 val releaseMavenCentralDeployment = tasks.register("releaseMavenCentralDeployment") {
     group = "publishing"
     dependsOn(checkMavenCentralPublishing)
+    mustRunAfter("publishReleaseToMavenCentral")
     onlyIf {
         publishTargetParam == "mavenCentral" && !version.toString().endsWith("SNAPSHOT")
     }
@@ -779,7 +780,8 @@ tasks.register("publishReleaseToMavenCentral") {
 
 tasks.register("publishAndReleaseToMavenCentral") {
     group = "publishing"
-    dependsOn("publishReleaseToMavenCentral", releaseMavenCentralDeployment)
+    dependsOn("publishReleaseToMavenCentral")
+    finalizedBy(releaseMavenCentralDeployment)
 }
 
 tasks.register("printResolvedVersions") {

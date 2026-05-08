@@ -448,18 +448,24 @@ jobs:
             -Pversion=$RELEASE_VERSION \
             -PpgVersion=$POSTGRES_VERSION \
             -PpostgisVersion=$POSTGIS_VERSION
-      - name: Summarize next steps
+      - name: Finalize Maven Central deployment
         env:
           RELEASE_VERSION: ${{ needs.resolve-inputs.outputs.release_version }}
+          POSTGRES_VERSION: ${{ needs.resolve-inputs.outputs.postgres_version }}
+          POSTGIS_VERSION: ${{ needs.resolve-inputs.outputs.postgis_version }}
         run: |
+          ./gradlew --no-daemon --stacktrace \
+            releaseMavenCentralDeployment \
+            -PpublishTarget=mavenCentral \
+            -Pversion=$RELEASE_VERSION \
+            -PpgVersion=$POSTGRES_VERSION \
+            -PpostgisVersion=$POSTGIS_VERSION
           {
-            echo "## Maven Central release upload complete"
+            echo "## Maven Central release complete"
             echo
-            echo "Uploaded signed release artifacts for \`$RELEASE_VERSION\`."
+            echo "Uploaded signed release artifacts and finalized the Central deployment for \`$RELEASE_VERSION\`."
             echo
-            echo "Manual next steps:"
-            echo "1. Open https://central.sonatype.com/publishing/deployments"
-            echo "2. Inspect the uploaded deployment under namespace \`dev.tronto.postgis\`"
-            echo "3. Publish/release it manually from the Central UI"
-            echo "4. Create the Git tag only after Central publication looks correct"
+            echo "Next step:"
+            echo "1. Verify the release in https://central.sonatype.com/publishing/deployments or on Maven Central"
+            echo "2. Create the Git tag only after verification looks correct"
           } >> "$GITHUB_STEP_SUMMARY"

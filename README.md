@@ -341,7 +341,7 @@ Optional parameters:
 
 The `Release` workflow publishes versions in the `<pg_version>-<postgis_version>` format and targets the six default release artifacts listed above. It still runs automatically when a milestone is closed, and it can also be started manually with `workflow_dispatch`. Linux and Alpine are built as four separate jobs (`linux-amd64`, `linux-arm64`, `alpine-amd64`, `alpine-arm64`), Windows amd64 and macOS arm64 are tested on their native runners, and then all Maven Central uploads are performed from a single final Ubuntu job.
 
-The workflow intentionally stops after the signed release artifacts have been uploaded. You are expected to open the Central deployment in the web UI, inspect it, and publish/release it manually there. Git tags are also left manual so they can follow that verification step.
+The workflow now uploads the signed release artifacts and finalizes the Central deployment automatically. After it completes, you can verify the published release in the Central UI or on Maven Central. Git tags are still left manual so they can follow that verification step.
 
 The `Publish Snapshot` workflow mirrors the same platform build matrix but publishes `<pg_version>-<postgis_version>-SNAPSHOT` artifacts to the Central snapshots repository instead of creating a release deployment.
 
