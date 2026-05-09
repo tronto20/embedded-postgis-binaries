@@ -21,8 +21,7 @@ Use the same substitution or explicit dependency pattern for either line; only t
 
 * Importing `embedded-postgres-binaries-bom` manages versions only. You still need one or more concrete platform artifacts.
 * For explicit Apple Silicon usage, prefer `embedded-postgres-binaries-darwin-arm64v8`.
-* For drop-in compatibility with existing Zonky setups on Apple Silicon, `embedded-postgres-binaries-darwin-amd64` is provided as a compatibility alias. It keeps the legacy module name, but the payload is Apple Silicon only.
-* Do not declare both `embedded-postgres-binaries-darwin-arm64v8` and `embedded-postgres-binaries-darwin-amd64`.
+* This repository does not publish a macOS amd64 artifact.
 
 ## `build.gradle` (Groovy DSL)
 
@@ -143,10 +142,6 @@ Maven does not have a dependency substitution feature equivalent to Gradle, so t
                 <groupId>io.zonky.test.postgres</groupId>
                 <artifactId>embedded-postgres-binaries-windows-amd64</artifactId>
             </exclusion>
-            <exclusion>
-                <groupId>io.zonky.test.postgres</groupId>
-                <artifactId>embedded-postgres-binaries-darwin-amd64</artifactId>
-            </exclusion>
         </exclusions>
     </dependency>
 
@@ -156,17 +151,6 @@ Maven does not have a dependency substitution feature equivalent to Gradle, so t
         <scope>runtime</scope>
     </dependency>
 </dependencies>
-```
-
-If you want the Apple Silicon compatibility alias instead of the explicit arm64 artifact, replace the last dependency with:
-
-```xml
-<dependency>
-    <groupId>dev.tronto.postgis</groupId>
-    <artifactId>embedded-postgres-binaries-darwin-amd64</artifactId>
-    <version>18.3-3.6.2</version>
-    <scope>runtime</scope>
-</dependency>
 ```
 
 ## Platform artifacts
@@ -182,7 +166,5 @@ Primary published artifacts:
 
 Additional compatibility / optional artifacts:
 
-* `embedded-postgres-binaries-darwin-amd64`
-  * Apple Silicon compatibility alias only
 * `embedded-postgres-binaries-windows-arm64v8`
   * optional, experimental

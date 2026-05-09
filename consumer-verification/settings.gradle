@@ -1,1 +1,5 @@
 rootProject.name = 'consumer-verification'
+
+includeBuild('..') {
+    name = 'embedded-postgis-binaries'
+}

@@ -6,8 +6,9 @@ group = 'io.zonky.test.postgres.verification'
 version = '1.0.0-SNAPSHOT'
 
 def embeddedPostgresVersion = providers.gradleProperty('embeddedPostgresVersion').orElse('2.2.2').get()
-def postgresBinariesVersion = providers.gradleProperty('postgresBinariesVersion').orElse('18.3-3.6.2').get()
-def postgresBinariesArtifact = providers.gradleProperty('postgresBinariesArtifact').orElse('embedded-postgres-binaries-darwin-arm64v8').get()
+def pgVersion = providers.gradleProperty('pgVersion').orElse('18.3').get()
+def postgisVersion = providers.gradleProperty('postgisVersion').orElse('3.6.2').get()
+def postgresBinariesVersion = providers.gradleProperty('postgresBinariesVersion').orElse("${pgVersion}-${postgisVersion}").get()
 
 java {
     sourceCompatibility = JavaVersion.VERSION_11
@@ -21,12 +22,50 @@ repositories {
 
 dependencies {
     implementation "io.zonky.test:embedded-postgres:${embeddedPostgresVersion}"
-    implementation "dev.tronto.postgis:${postgresBinariesArtifact}:${postgresBinariesVersion}"
+}
+
+configurations.configureEach {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == "io.zonky.test.postgres" &&
+                details.requested.name.startsWith("embedded-postgres-binaries")) {
+            details.useTarget("dev.tronto.postgis:${details.requested.name}:${postgresBinariesVersion}")
+            details.because("Use the PostGIS-enabled embedded postgres binaries from the local composite build")
+        }
+    }
+}
+
+def currentBinaryInstallTask = {
+    def operatingSystem = org.gradle.internal.os.OperatingSystem.current()
+    def distName = providers.gradleProperty('distName').orElse('').get()
+    if (operatingSystem.isMacOsX()) {
+        return distName == 'darwin' ? ':custom-darwin-platform:publishCustomDarwinPublicationToMavenLocal' : ':custom-darwin-platform:install'
+    }
+    if (operatingSystem.isWindows()) {
+        return distName == 'windows' ? ':custom-windows-platform:publishCustomWindowsPublicationToMavenLocal' : ':custom-windows-platform:install'
+    }
+    def systemArch = System.getProperty('os.arch').toLowerCase(java.util.Locale.US)
+    if (distName == 'alpine') {
+        return systemArch.contains('aarch64') || systemArch.contains('arm64') ?
+                ':alpine-platforms:publishArm64v8AlpinePublicationToMavenLocal' :
+                ':alpine-platforms:publishAmd64AlpinePublicationToMavenLocal'
+    }
+    if (systemArch.contains('aarch64') || systemArch.contains('arm64')) {
+        return ':debian-platforms:publishArm64v8DebianPublicationToMavenLocal'
+    }
+    return ':debian-platforms:publishAmd64DebianPublicationToMavenLocal'
+}
+
+tasks.register('prepareIncludedBinaries') {
+    group = 'verification'
+    description = 'Publishes the matching binary artifacts from the included build to the local Maven repository.'
+    dependsOn(gradle.includedBuild('embedded-postgis-binaries').task(currentBinaryInstallTask()))
 }
 
 tasks.register('smokeTest', JavaExec) {
     group = 'verification'
-    description = 'Starts embedded postgres from mavenLocal and runs PostGIS smoke queries.'
+    description = 'Starts embedded postgres from the included build and runs PostGIS smoke queries.'
+    dependsOn('prepareIncludedBinaries')
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'io.zonky.test.postgres.verification.PostgisConsumerSmokeMain'
+    args postgisVersion
 }

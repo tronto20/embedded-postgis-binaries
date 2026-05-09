@@ -16,10 +16,14 @@ public final class PostgisConsumerSmokeMain {
     }
 
     public static void main(String[] args) throws Exception {
+        if (args.length != 1) {
+            throw new IllegalArgumentException("Expected the PostGIS library version as the only argument");
+        }
+
         try (EmbeddedPostgres postgres = startPostgres();
              Connection connection = postgres.getPostgresDatabase().getConnection()) {
             execute(connection, "CREATE EXTENSION postgis");
-            expectScalar(connection, "SELECT PostGIS_Lib_Version()", "3.6.2");
+            expectScalar(connection, "SELECT PostGIS_Lib_Version()", args[0]);
             expectScalar(connection,
                     "SELECT ST_AsText(ST_Transform('SRID=4326;POINT(0 0)'::geometry, 3857))",
                     "POINT(0 0)");

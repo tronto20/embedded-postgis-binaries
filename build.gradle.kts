@@ -481,7 +481,6 @@ fun resolveBomDependencies(project: Project): List<BomDependency> {
     val sortRegex = Regex("""^embedded-postgres-binaries-([^-]+-([^-]+).*)$""")
 
     return dependencies
-        .filter { it.artifactId != "embedded-postgres-binaries-darwin-amd64" }
         .sortedBy { dependency ->
             val match = sortRegex.find(dependency.artifactId)
             if (match == null) {
@@ -1194,13 +1193,6 @@ project(":custom-darwin-platform") {
             archiveAppendix.set("darwin-$archName")
         }
 
-        val compatJarTask = tasks.register("compatDarwinAmd64Jar", Jar::class.java) {
-            group = "build (custom)"
-            from(buildTask)
-            include("postgres-darwin-${normalizeArchName(archName)}.txz")
-            archiveAppendix.set("darwin-amd64")
-        }
-
         val testTask = tasks.register("testCustomDarwinJar", Exec::class.java) {
             group = "build (custom)"
             dependsOn(validateInputs, jarTask)
@@ -1225,7 +1217,6 @@ project(":custom-darwin-platform") {
         }
 
         registerBundlePublication(project, "customDarwin", "embedded-postgres-binaries-darwin-$archName", jarTask, testTask)
-        registerBundlePublication(project, "compatDarwinAmd64", "embedded-postgres-binaries-darwin-amd64", compatJarTask, null)
     }
 }
 
