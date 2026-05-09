@@ -6,8 +6,16 @@ The intended migration path is:
 
 * keep `io.zonky.test:embedded-postgres`
 * replace only the binary artifacts with `dev.tronto.postgis:*`
+* exclude the old `io.zonky.test.postgres` binary artifacts so the legacy bundle and the PostGIS bundle do not both remain on the classpath
 
-Published versions use the format `<pg_version>-<postgis_version>`, for example `18.3-3.6.2`.
+Published versions use the format `<pg_version>-<postgis_version>`, for example `18.3-3.6.2` and `17.9-3.5.3`.
+
+Current release lines:
+
+* `18.3-3.6.2`
+* `17.9-3.5.3`
+
+Use the same substitution or explicit dependency pattern for either line; only the version string changes.
 
 ## Important points
 
@@ -42,7 +50,7 @@ dependencies {
 }
 ```
 
-If you prefer explicit platform declaration instead of substitution:
+If you prefer explicit platform declaration instead of substitution, keep the exclusion in place so the old Zonky binaries do not remain alongside the new ones:
 
 ```gradle
 dependencies {
@@ -97,7 +105,7 @@ dependencies {
 
 ## `pom.xml` (Maven)
 
-Maven does not have a dependency substitution feature equivalent to Gradle, so the migration is explicit:
+Maven does not have a dependency substitution feature equivalent to Gradle, so the migration is explicit. You must exclude the old Zonky binary artifacts or the legacy bundle can still stay on the runtime classpath:
 
 1. keep `io.zonky.test:embedded-postgres`
 2. exclude the old Zonky binary artifacts that would otherwise stay on the classpath
