@@ -17,8 +17,6 @@ The published Maven Central coordinates are:
 * `dev.tronto.postgis:embedded-postgres-binaries-windows-amd64`
 * `dev.tronto.postgis:embedded-postgres-binaries-darwin-arm64v8`
 
-The compatibility alias `dev.tronto.postgis:embedded-postgres-binaries-darwin-amd64` is also published for Apple Silicon setups that still expect the legacy module name.
-
 ## Maven Central Publishing
 
 Maven Central publishing uses:
@@ -143,8 +141,6 @@ The primary published artifact set is:
 
 Additional artifacts:
 
-* `embedded-postgres-binaries-darwin-amd64`
-  * Apple Silicon compatibility alias
 * `embedded-postgres-binaries-windows-arm64v8`
   * optional and experimental
 

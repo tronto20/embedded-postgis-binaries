@@ -29,6 +29,8 @@ jobs:
     outputs:
       postgres_matrix: ${{ steps.resolve.outputs.postgres_matrix }}
       postgis_version: ${{ steps.resolve.outputs.postgis_version }}
+      consumer_pg_version: ${{ steps.resolve.outputs.consumer_pg_version }}
+      postgres_binaries_version: ${{ steps.resolve.outputs.postgres_binaries_version }}
       windows_pg_bin_version: ${{ steps.resolve.outputs.windows_pg_bin_version }}
       include_windows_arm64: ${{ steps.resolve.outputs.include_windows_arm64 }}
       windows_arm64_pg_version: ${{ steps.resolve.outputs.windows_arm64_pg_version }}
@@ -65,6 +67,8 @@ jobs:
 
             echo "postgres_matrix=[\"$RESOLVED_PG_VERSION\"]" >> "$GITHUB_OUTPUT"
             echo "postgis_version=$RESOLVED_POSTGIS_VERSION" >> "$GITHUB_OUTPUT"
+            echo "consumer_pg_version=$RESOLVED_PG_VERSION" >> "$GITHUB_OUTPUT"
+            echo "postgres_binaries_version=${RESOLVED_PG_VERSION}-${RESOLVED_POSTGIS_VERSION}" >> "$GITHUB_OUTPUT"
             echo "windows_pg_bin_version=${INPUT_PG_BIN_VERSION:-${RESOLVED_PG_VERSION}-1}" >> "$GITHUB_OUTPUT"
             echo "include_windows_arm64=$INCLUDE_WINDOWS_ARM64" >> "$GITHUB_OUTPUT"
 
@@ -79,10 +83,28 @@ jobs:
           else
             echo 'postgres_matrix=["18.3","17.9","16.13"]' >> "$GITHUB_OUTPUT"
             echo "postgis_version=3.6.2" >> "$GITHUB_OUTPUT"
+            echo "consumer_pg_version=18.3" >> "$GITHUB_OUTPUT"
+            echo "postgres_binaries_version=18.3-3.6.2" >> "$GITHUB_OUTPUT"
             echo "windows_pg_bin_version=" >> "$GITHUB_OUTPUT"
             echo "include_windows_arm64=false" >> "$GITHUB_OUTPUT"
             echo "windows_arm64_pg_version=18.2" >> "$GITHUB_OUTPUT"
           fi
+
+  gradle-consumer:
+    name: Gradle consumer smoke test
+    needs: resolve-inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Run consumer smoke test
+        run: ./gradlew -p consumer-verification smokeTest -PpgVersion=${{ needs.resolve-inputs.outputs.consumer_pg_version }} -PpostgisVersion=${{ needs.resolve-inputs.outputs.postgis_version }} -PpostgresBinariesVersion=${{ needs.resolve-inputs.outputs.postgres_binaries_version }}
+        timeout-minutes: 60
 
   linux-amd64:
     name: PostgreSQL ${{ matrix.postgres }} + PostGIS ${{ needs.resolve-inputs.outputs.postgis_version }} (Linux amd64)

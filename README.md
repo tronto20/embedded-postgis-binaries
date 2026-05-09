@@ -22,7 +22,6 @@ Current release-line JAR sizes for `18.3-3.6.2`:
 * Alpine arm64: `78.9 MB`
 * Windows amd64: `154.7 MB`
 * macOS arm64: `45.4 MB`
-* macOS amd64 compatibility alias: same payload as `macOS arm64`
 
 ## Consuming published artifacts
 
@@ -68,56 +67,67 @@ Primary macOS artifact:
 
 * `embedded-postgres-binaries-darwin-arm64v8`
 
-Compatibility alias for existing Zonky-based setups on Apple Silicon:
-
-* `embedded-postgres-binaries-darwin-amd64`
-
-Use one of them, not both. The compatibility alias keeps the legacy Zonky module name, but its payload is still the Apple Silicon `postgres-darwin-arm_64.txz` bundle.
-
 If you are running an Intel macOS JVM, this repository does not publish a native `darwin-x86_64` bundle.
 
 ### Quick start
 
-If you are replacing the legacy Zonky binary bundles, exclude `io.zonky.test.postgres` in the same dependency block and then add the `dev.tronto.postgis` binary artifact you want.
+The examples below cover both Gradle and Maven. The Gradle snippet swaps the legacy Zonky binary modules by name, and the Maven snippet keeps all supported runtime artifacts on the classpath so the same POM works across supported platforms and architectures.
 The Groovy and Kotlin examples intentionally use the same dependency coordinates; only the DSL syntax changes.
 
 Groovy DSL (`build.gradle`):
 
 ```gradle
+def postgisBinariesVersion = "18.3-3.6.2"
+
 repositories {
     mavenCentral()
 }
 
-dependencies {
-    testImplementation("io.zonky.test:embedded-postgres:2.2.2") {
-        exclude group: "io.zonky.test.postgres"
+configurations.configureEach {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == "io.zonky.test.postgres" &&
+                details.requested.name.startsWith("embedded-postgres-binaries")) {
+            details.useTarget("dev.tronto.postgis:${details.requested.name}:$postgisBinariesVersion")
+            details.because("Use PostGIS-enabled embedded postgres binaries")
+        }
     }
-    testRuntimeOnly(platform("dev.tronto.postgis:embedded-postgres-binaries-bom:18.3-3.6.2"))
-    testRuntimeOnly("dev.tronto.postgis:embedded-postgres-binaries-darwin-arm64v8")
+}
+
+dependencies {
+    testImplementation("io.zonky.test:embedded-postgres:2.2.2")
 }
 ```
 
-To use the older release line, change the BOM and runtime version to `17.9-3.5.3`.
+To use the older release line, change `postgisBinariesVersion` to `17.9-3.5.3`.
 
 Kotlin DSL (`build.gradle.kts`):
 
 ```kotlin
+val postgisBinariesVersion = "18.3-3.6.2"
+
 repositories {
     mavenCentral()
 }
 
-dependencies {
-    testImplementation("io.zonky.test:embedded-postgres:2.2.2") {
-        exclude(group = "io.zonky.test.postgres")
+configurations.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "io.zonky.test.postgres" &&
+            requested.name.startsWith("embedded-postgres-binaries")
+        ) {
+            useTarget("dev.tronto.postgis:${requested.name}:$postgisBinariesVersion")
+            because("Use PostGIS-enabled embedded postgres binaries")
+        }
     }
-    testRuntimeOnly(platform("dev.tronto.postgis:embedded-postgres-binaries-bom:18.3-3.6.2"))
-    testRuntimeOnly("dev.tronto.postgis:embedded-postgres-binaries-darwin-arm64v8")
+}
+
+dependencies {
+    testImplementation("io.zonky.test:embedded-postgres:2.2.2")
 }
 ```
 
-The same pattern works for `17.9-3.5.3`; only the version string changes.
+To use the older release line, change `postgisBinariesVersion` to `17.9-3.5.3`.
 
-Maven (`pom.xml`):
+Maven DSL (`pom.xml`):
 
 ```xml
 <dependencyManagement>
@@ -150,11 +160,33 @@ Maven (`pom.xml`):
                 <groupId>io.zonky.test.postgres</groupId>
                 <artifactId>embedded-postgres-binaries-windows-amd64</artifactId>
             </exclusion>
-            <exclusion>
-                <groupId>io.zonky.test.postgres</groupId>
-                <artifactId>embedded-postgres-binaries-darwin-amd64</artifactId>
-            </exclusion>
         </exclusions>
+    </dependency>
+
+    <dependency>
+        <groupId>dev.tronto.postgis</groupId>
+        <artifactId>embedded-postgres-binaries-linux-amd64</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+    <dependency>
+        <groupId>dev.tronto.postgis</groupId>
+        <artifactId>embedded-postgres-binaries-linux-arm64v8</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+    <dependency>
+        <groupId>dev.tronto.postgis</groupId>
+        <artifactId>embedded-postgres-binaries-linux-amd64-alpine</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+    <dependency>
+        <groupId>dev.tronto.postgis</groupId>
+        <artifactId>embedded-postgres-binaries-linux-arm64v8-alpine</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+    <dependency>
+        <groupId>dev.tronto.postgis</groupId>
+        <artifactId>embedded-postgres-binaries-windows-amd64</artifactId>
+        <scope>runtime</scope>
     </dependency>
     <dependency>
         <groupId>dev.tronto.postgis</groupId>
@@ -164,9 +196,11 @@ Maven (`pom.xml`):
 </dependencies>
 ```
 
-Use `17.9-3.5.3` instead of `18.3-3.6.2` if you need the older release line.
+This Maven example is platform-agnostic: it keeps every supported runtime artifact on the classpath, so the same POM works on Linux, Alpine, Windows amd64, and Apple Silicon macOS.
 
-For the full compatibility guide, including drop-in substitution for existing Zonky users and the Apple Silicon compatibility alias, see [docs/using-with-zonky.md](docs/using-with-zonky.md).
+If you prefer a slimmer Maven dependency set, see [docs/using-with-zonky.md](docs/using-with-zonky.md) for the platform-specific variant.
+
+The Gradle quick start is exercised by the `consumer-verification` build in CI.
 
 ## Building from Source
 The project uses a [Gradle](http://gradle.org)-based build system. In the instructions
